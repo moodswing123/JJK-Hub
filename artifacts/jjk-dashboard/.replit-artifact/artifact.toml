@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "JJK RPG Dashboard"
+description = "A full-stack web companion dashboard for the Jujutsu Kaisen Telegram RPG bot. Players log in via Telegram OAuth, manage their characters, spend Yen in the shop, gamble in the casino, play mini-games, view leaderboards, and admins can manage the game from a panel — all syncing with the existing bot database in real-time."
+version = "1.0.0"
+id = "artifacts/jjk-dashboard"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24438
+
+[services.development]
+run = "pnpm --filter @workspace/jjk-dashboard run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/jjk-dashboard", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/jjk-dashboard/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24438"
+BASE_PATH = "/"
