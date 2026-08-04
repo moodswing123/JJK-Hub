@@ -33,10 +33,14 @@ WORKDIR /app
 COPY --from=deps /app /app
 COPY . .
 
-# Ensure pnpm is available and build the api-server package
+# Increase Node heap for the build to avoid OOM and enable verbose pnpm output for debugging
+ENV NODE_OPTIONS=--max-old-space-size=4096
+
+# Ensure pnpm is available and build the api-server package with debug logging
 RUN corepack enable \
   && corepack prepare pnpm@latest --activate \
-  && pnpm -w --filter "@workspace/api-server" run build
+  && pnpm --version \
+  && pnpm --loglevel debug -w --filter "@workspace/api-server" run build
 
 # -------------------- runner stage --------------------
 FROM node:22-bullseye-slim AS runner
