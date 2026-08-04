@@ -1,7 +1,8 @@
 # Multi-stage Dockerfile for pnpm workspace (api-server)
 # Uses Corepack to enable pnpm and builds only the api-server artifact
 
-FROM node:20-alpine AS deps
+# Use Node 22 to satisfy pnpm's Node engine requirement
+FROM node:22-alpine AS deps
 WORKDIR /app
 # Copy lockfiles and minimal workspace metadata first for deterministic installs
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
@@ -13,7 +14,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN pnpm install --frozen-lockfile
 
 ########################################
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 # Reuse installed deps and copy source
 COPY --from=deps /app /app
@@ -24,7 +25,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate \
     && pnpm -w --filter "@workspace/api-server" run build
 
 ########################################
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
