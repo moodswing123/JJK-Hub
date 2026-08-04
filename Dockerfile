@@ -1,42 +1,51 @@
 # Multi-stage Dockerfile for pnpm workspace (api-server)
 # Uses Corepack to enable pnpm and builds only the api-server artifact
+# Uses Debian slim base to avoid musl/native binary issues and installs build tools
 
-# Use Node 22 to satisfy pnpm's Node engine requirement
-FROM node:22-alpine AS deps
+# -------------------- deps stage --------------------
+FROM node:22-bullseye-slim AS deps
 WORKDIR /app
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build tools needed for native module builds (esbuild, node-gyp, etc.)
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 build-essential ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+
 # Copy lockfiles and minimal workspace metadata first for deterministic installs
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 
-# Enable corepack and activate pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Enable corepack and activate pnpm, then install workspace deps allowing required build scripts
+RUN corepack enable \
+  && corepack prepare pnpm@latest --activate \
+  && pnpm install --approve-builds --frozen-lockfile
 
-# Install all workspace dependencies according to lockfile
-RUN pnpm install --frozen-lockfile
-
-# Approve package build scripts so pnpm won't skip required builds in CI/non-interactive
-RUN pnpm approve-builds --all --yes || true
-
-########################################
-FROM node:22-alpine AS build
+# -------------------- build stage --------------------
+FROM node:22-bullseye-slim AS build
 WORKDIR /app
 # Reuse installed deps and copy source
 COPY --from=deps /app /app
 COPY . .
 
-# Ensure pnpm is available and approve builds again (idempotent), then build the api-server package
-RUN corepack enable && corepack prepare pnpm@latest --activate \
-    && pnpm approve-builds --all --yes || true \
-    && pnpm -w --filter "@workspace/api-server" run build
+# Ensure pnpm is available and build the api-server package
+RUN corepack enable \
+  && corepack prepare pnpm@latest --activate \
+  && pnpm -w --filter "@workspace/api-server" run build
 
-########################################
-FROM node:22-alpine AS runner
+# -------------------- runner stage --------------------
+FROM node:22-bullseye-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Install production dependencies only
+# Install only production dependencies (approve build scripts non-interactively)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
-RUN corepack enable && corepack prepare pnpm@latest --activate \
-    && pnpm install --frozen-lockfile --prod
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/* \
+  && corepack enable \
+  && corepack prepare pnpm@latest --activate \
+  && pnpm install --approve-builds --frozen-lockfile --prod
 
 # Copy built artifact from build stage
 COPY --from=build /app/artifacts/api-server/dist ./artifacts/api-server/dist
