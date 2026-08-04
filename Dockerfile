@@ -38,14 +38,12 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install only production dependencies (approve build scripts non-interactively)
+# Copy package metadata
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl \
-  && rm -rf /var/lib/apt/lists/* \
-  && corepack enable \
-  && corepack prepare pnpm@latest --activate \
-  && pnpm install --approve-builds --frozen-lockfile --prod
+
+# Copy node_modules from deps stage to avoid running pnpm again (avoids unknown option issues)
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/.pnpm-store ./ .pnpm-store || true
 
 # Copy built artifact from build stage
 COPY --from=build /app/artifacts/api-server/dist ./artifacts/api-server/dist
