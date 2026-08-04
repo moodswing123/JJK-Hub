@@ -15,10 +15,16 @@ RUN apt-get update \
 # Copy lockfiles and minimal workspace metadata first for deterministic installs
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 
-# Enable corepack and activate pnpm, then install workspace deps allowing required build scripts
+# Activate pnpm and print its version for debugging
 RUN corepack enable \
   && corepack prepare pnpm@latest --activate \
-  && pnpm install --approve-builds --frozen-lockfile
+  && pnpm --version || true
+
+# Approve build scripts non-interactively; if the active pnpm doesn't provide the command, install pnpm globally and retry
+RUN pnpm approve-builds --all --yes || (npm i -g pnpm@latest && pnpm approve-builds --all --yes)
+
+# Install workspace deps from lockfile (no --approve-builds flag here)
+RUN pnpm install --frozen-lockfile
 
 # -------------------- build stage --------------------
 FROM node:22-bullseye-slim AS build
@@ -41,9 +47,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Copy package metadata
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 
-# Copy node_modules from deps stage to avoid running pnpm again (avoids unknown option issues)
+# Copy node_modules and pnpm store from deps stage to avoid re-running pnpm in the runner
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/.pnpm-store ./ .pnpm-store || true
+COPY --from=deps /app/.pnpm-store ./.pnpm-store || true
 
 # Copy built artifact from build stage
 COPY --from=build /app/artifacts/api-server/dist ./artifacts/api-server/dist
