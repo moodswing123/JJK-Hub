@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { initDashboardTables } from "./lib/db";
 
 const app: Express = express();
 
@@ -25,9 +26,18 @@ app.use(
     },
   }),
 );
-app.use(cors());
+
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Initialize dashboard tables on startup
+initDashboardTables().catch((err) => {
+  logger.error({ err }, "Failed to initialize dashboard tables");
+});
 
 app.use("/api", router);
 
