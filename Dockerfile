@@ -13,6 +13,9 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 # Install all workspace dependencies according to lockfile
 RUN pnpm install --frozen-lockfile
 
+# Approve package build scripts so pnpm won't skip required builds in CI/non-interactive
+RUN pnpm approve-builds --all --yes || true
+
 ########################################
 FROM node:22-alpine AS build
 WORKDIR /app
@@ -20,8 +23,9 @@ WORKDIR /app
 COPY --from=deps /app /app
 COPY . .
 
-# Ensure pnpm is available and build the api-server package
+# Ensure pnpm is available and approve builds again (idempotent), then build the api-server package
 RUN corepack enable && corepack prepare pnpm@latest --activate \
+    && pnpm approve-builds --all --yes || true \
     && pnpm -w --filter "@workspace/api-server" run build
 
 ########################################
