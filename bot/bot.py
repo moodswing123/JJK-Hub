@@ -23,7 +23,7 @@ from database import Database
 from game_engine import GameEngine
 from image_generator import ImageGenerator
 from utils import is_owner, is_admin, format_yen
-from expansion_system import ExpansionSystem
+from expansion_system import ExpansionSystem, GEAR_PRICES
 from web_auth import build_web_conversation, build_web_reset_handler
 from commands.wallet import build_wallet_command
 from commands.battle import build_battle_commands
@@ -324,7 +324,7 @@ async def gear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _expansion_reply(
             update,
             "🗡️ **Cursed Gear Catalog**\n" + "\n".join(
-                f"#{index} • {name} — {desc} | ¥{expansion.GEAR_PRICES.get(name.lower(), 0):,}"
+                f"#{index} • {name} — {desc} | ¥{GEAR_PRICES.get(name.lower(), 0):,}"
                 for index, (name, desc) in enumerate(catalog, start=1)
             ) +
             "\n\nOwned:\n" + ("\n".join(f"• {g['gear_name']} Lv.{g['level']} {'[equipped]' if g['equipped'] else ''}" for g in owned) or "None") +
