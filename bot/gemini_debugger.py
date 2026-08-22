@@ -20,7 +20,7 @@ def analyze_diagnostic(report: str) -> str | None:
     key = os.getenv("GEMINI_API_KEY")
     if not key:
         return None
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
     endpoint = os.getenv("GEMINI_API_ENDPOINT", "https://generativelanguage.googleapis.com/v1beta/models")
     prompt = (
         "You are a cautious production-game diagnostic assistant. Analyze only the supplied bot diagnostic report. "
