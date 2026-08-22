@@ -36,3 +36,7 @@ RPG bot
 ## Gemini-powered `/debug`
 
 The owner-only `/debug` command runs deterministic database, player, battle, and integrity checks first. If `GEMINI_API_KEY` is configured in the bot deployment, it then sends a redacted, bounded diagnostic report to Gemini for a concise root-cause review. The AI review is advisory only; it cannot execute code, change the database, or repair production state. If the key is missing or Gemini times out, deterministic diagnostics still complete normally. Configure `GEMINI_API_KEY` as a deployment secret and optionally set `GEMINI_MODEL` (default: `gemini-3.6-flash`).
+
+## Battle media provider note
+
+The bot currently uses its Pillow-based generated GIF pipeline for `/battle`, `/ch`, and bot challenges. A connector inspection found no enabled Nano Banana provider or compatible free credential in the deployment configuration, so Nano Banana cannot be activated safely at this time. The Pillow pipeline is therefore the supported implementation; replacing it later requires a supported image-generation API and deployment secret.
