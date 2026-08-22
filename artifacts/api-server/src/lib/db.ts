@@ -4,25 +4,36 @@ import { logger } from "./logger";
 const { Pool } = pg;
 
 const postgresUrl = process.env.POSTGRES_URL;
-if (!postgresUrl) {
-  throw new Error("POSTGRES_URL must be set. Add it as a Secret.");
+
+// Keep module loading side-effect free for serverless runtimes. Requests that
+// need the database receive a clear error instead of crashing the function
+// before Express can handle the request.
+export const pool = postgresUrl
+  ? new Pool({
+      connectionString: postgresUrl,
+      ssl: { rejectUnauthorized: false },
+      max: 10,
+    })
+  : null;
+
+if (pool) {
+  pool.on("error", (err) => {
+    logger.error({ err }, "Unexpected pool error");
+  });
 }
 
-export const pool = new Pool({
-  connectionString: postgresUrl,
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-});
-
-pool.on("error", (err) => {
-  logger.error({ err }, "Unexpected pool error");
-});
+function getPool() {
+  if (!pool) {
+    throw new Error("POSTGRES_URL must be configured for database-backed routes.");
+  }
+  return pool;
+}
 
 export async function query<T extends Record<string, unknown> = Record<string, unknown>>(
   sql: string,
   params?: unknown[]
 ): Promise<T[]> {
-  const client = await pool.connect();
+  const client = await getPool().connect();
   try {
     const res = await client.query(sql, params);
     return res.rows as T[];
@@ -41,6 +52,11 @@ export async function queryOne<T extends Record<string, unknown> = Record<string
 
 /** Initialize all dashboard-specific tables */
 export async function initDashboardTables(): Promise<void> {
+  if (!pool) {
+    logger.warn("POSTGRES_URL is not configured; dashboard tables were not initialized");
+    return;
+  }
+
   const client = await pool.connect();
   try {
     await client.query(`
