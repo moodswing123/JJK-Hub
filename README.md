@@ -8,7 +8,7 @@ The `client/` directory contains the Vite dashboard. The `bot/` directory contai
 
 ## Deployment boundary
 
-Deploy the repository root to Vercel with `pnpm build` and `dist/public` as the output directory. Vercel serves the frontend only. Run the Python bot and `bot/web_api.py` on a Python-capable host with `BOT_TOKEN`, `OWNER_ID`, `POSTGRES_URL`, `WEB_AUTH_SECRET`, and `DASHBOARD_URL` configured as private environment variables. Set the dashboard’s `VITE_API_BASE_URL` to the public API URL ending in `/api`.
+Deploy the repository root to Vercel with `pnpm build` and `dist/public` as the output directory. Vercel serves the frontend only. The current public dashboard URL is `https://jjk-hub-api-server-5qop-ten.vercel.app/`. Run the Python bot and `bot/web_api.py` on a Python-capable host with `BOT_TOKEN`, `OWNER_ID`, `POSTGRES_URL`, `WEB_AUTH_SECRET`, and `DASHBOARD_URL` configured as private environment variables. Set the dashboard’s `VITE_API_BASE_URL` to the separate public API URL ending in `/api`; do not use the dashboard URL as the API base unless the API is deployed on the same host.
 
 ## Player access flow
 

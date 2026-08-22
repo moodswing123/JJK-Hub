@@ -43,8 +43,12 @@ def generate_reset_code() -> str:
     return secrets.token_urlsafe(6).replace("-", "A").replace("_", "B").upper()[:8]
 
 
+# Public JJK RPG dashboard URL used when DASHBOARD_URL is not supplied by the host.
+_DEFAULT_DASHBOARD_URL = "https://jjk-hub-api-server-5qop-ten.vercel.app"
+
+
 def _dashboard_url() -> str:
-    return os.getenv("DASHBOARD_URL", "").strip().rstrip("/")
+    return (os.getenv("DASHBOARD_URL") or _DEFAULT_DASHBOARD_URL).strip().rstrip("/")
 
 
 def build_web_reset_handler(db):

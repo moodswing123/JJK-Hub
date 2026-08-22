@@ -2559,7 +2559,11 @@ HELP_PAGES = [
         "`/rank` — Your rank & requirements\n"
         "`/leaderboard` — Top sorcerers\n"
         "`/missions` — Daily quests\n"
-        "`/daily` — Claim daily reward\n"
+        "`/daily` — Claim daily reward\n\n"
+        "**🌐 Web Dashboard**\n"
+        "`/web` — Create your JJK RPG dashboard username and password\n"
+        "`/webreset` — Generate a one-time password-reset code\n"
+        "Open the dashboard link sent by the bot after registration.\n"
     ),
     # Page 2 — Combat
     (
