@@ -29,6 +29,8 @@ export type Player = {
 
 export type TelegramUser = { id: number; first_name: string; last_name?: string | null; username?: string | null; photo_url?: string | null; auth_date: number; hash: string };
 export type Activity = { id: number | string; message: string; created_at: string };
+export type InventoryItem = { id: number; name: string; type?: string; price?: number; description?: string; use_description?: string; effect?: Record<string, number> | string | null };
+
 export type Summary = { player: Player; online_count: number; recent_activity: Activity[]; announcements?: { title: string; content: string }[]; daily_status?: { streak?: number; can_claim?: boolean } };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -45,5 +47,7 @@ export const jjkApi = {
   passwordReset: (username: string, code: string, newPassword: string) => request<{ success: boolean }>('/auth/password-reset', { method: 'POST', body: JSON.stringify({ username, code, new_password: newPassword }) }),
   me: () => request<Player>('/auth/me'),
   summary: () => request<Summary>('/dashboard/summary'),
+  inventory: () => request<{ items: InventoryItem[] }>('/inventory'),
+  equip: (itemId: number) => request<{ success: boolean; item: InventoryItem }>('/inventory/equip', { method: 'POST', body: JSON.stringify({ item_id: itemId }) }),
   logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
 };

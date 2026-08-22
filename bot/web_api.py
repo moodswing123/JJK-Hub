@@ -115,7 +115,47 @@ def auth_me(user_id):
     return jsonify(player) if player else (jsonify({"error": "Player not found"}), 404)
 
 
+@app.route("/api/inventory", methods=["GET"])
+@require_user
+def inventory(user_id):
+    items = []
+    for item in db.get_inventory(user_id):
+        payload = dict(item)
+        try:
+            payload["effect"] = json.loads(payload["effect"]) if payload.get("effect") else {}
+        except Exception:
+            payload["effect"] = {}
+        items.append(payload)
+    return jsonify({"items": items})
+
+
+@app.route("/api/inventory/equip", methods=["POST"])
+@require_user
+def equip_inventory_item(user_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        item_id = int(data.get("item_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid item_id is required"}), 400
+    player = db.get_player(user_id)
+    item = next((candidate for candidate in db.get_inventory(user_id) if int(candidate["id"]) == item_id), None)
+    if not player or not item:
+        return jsonify({"error": "Cursed tool not found in your inventory"}), 404
+    if item.get("type") != "weapon":
+        return jsonify({"error": "Only weapon-type cursed tools can be equipped from the dashboard"}), 400
+    try:
+        effect = json.loads(item.get("effect") or "{}") if isinstance(item.get("effect"), str) else (item.get("effect") or {})
+    except Exception:
+        effect = {}
+    for stat in ("attack", "defense"):
+        if effect.get(stat):
+            db.update_player_stat(user_id, stat, int(player[stat]) + int(effect[stat]))
+    db.remove_from_inventory(user_id, item_id)
+    return jsonify({"success": True, "item": item})
+
+
 @app.route("/api/dashboard/summary", methods=["GET"])
+
 @require_user
 def dashboard_summary(user_id):
     player = _player_payload(db.get_player(user_id))
