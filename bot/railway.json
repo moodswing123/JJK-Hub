@@ -1,7 +1,7 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "deploy": {
-    "startCommand": "python3 -u bot.py",
+    "startCommand": "sh -c 'if [ \"${JJK_PROCESS:-bot}\" = \"api\" ] || [ \"${RAILWAY_SERVICE_NAME:-}\" = \"sweet-compassion\" ]; then exec WEB_API_PORT=\"${PORT:-8080}\" python3 -u web_api.py; else exec python3 -u bot.py; fi'",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
