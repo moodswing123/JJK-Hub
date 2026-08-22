@@ -262,6 +262,8 @@ class ExpansionSystem:
         price = GEAR_PRICES.get(normalized_name)
         if price is None:
             return False, "That gear is not in the catalog. Use `/gear` to see purchasable gear."
+        if any(g.get("gear_name", "").lower() == normalized_name for g in p.setdefault("gear", [])):
+            return False, "You already own that gear."
         if self.db:
             player = self.db.get_player(user_id)
             if not player:
@@ -269,8 +271,6 @@ class ExpansionSystem:
             if int(player.get("yen", 0)) < price:
                 return False, f"Not enough yen. This gear costs ¥{price:,}; you have ¥{int(player.get('yen', 0)):,}."
             self.db.deduct_yen(user_id, price)
-        if any(g.get("gear_name", "").lower() == name.lower() for g in p.setdefault("gear", [])):
-            return False, "You already own that gear."
         p["gear"].append({"gear_name": name, "level": 1, "equipped": False, "purchase_price": price})
         return True, f"Purchased gear: {name} for ¥{price:,}"
 

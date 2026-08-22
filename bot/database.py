@@ -1252,7 +1252,7 @@ class Database:
             rows = conn.execute(
                 """SELECT * FROM shop_items
                    WHERE LOWER(name) <> LOWER('Domain Expansion Blueprint')
-                   ORDER BY type,price"""
+                   ORDER BY type,price,id"""
             ).fetchall()
             return [dict(r) for r in rows]
 

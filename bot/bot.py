@@ -1657,7 +1657,7 @@ async def pvp_bot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"⚔️ **BOT BATTLE!**\n\n"
         f"👤 {player['display_name']} ({player_char['name'] if player_char else 'Unknown'})\n"
-        f"  ❤️ {player['hp']}/{player['max_hp']} | ⚔️ {player['attack']}\n\n"
+        f"  ❤️ {opening_player_hp}/{player['max_hp']} | ⚔️ {player['attack']}\n\n"
         f"🤖 Bot Opponent ({bot_char['name'] if bot_char else 'Unknown'})\n"
         f"  ❤️ {bot_player['hp']}/{bot_player['max_hp']} | ⚔️ {bot_player['attack']}\n\n"
         f"{'━' * 22}\n"

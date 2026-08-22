@@ -15,6 +15,9 @@ assert 'GEAR_PRICES = {' in EXPANSION
 assert "bot_starts = random.choice([True, False])" in BOT
 assert "'initiative': 'bot' if bot_starts else 'player'" in BOT
 assert "'reward': 20000" in ENGINE
+assert EXPANSION.index('if any(g.get("gear_name"') < EXPANSION.index('self.db.deduct_yen(user_id, price)')
+assert "opening_player_hp}/{player['max_hp']}" in BOT
+assert 'ORDER BY type,price,id' in DB
 assert 'challenge_gif = image_gen.generate_battle_gif' in BOT
 assert 'intro_gif = image_gen.generate_battle_gif' in BOT
 print('requested bot-fix assertions passed')
