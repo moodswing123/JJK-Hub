@@ -8,9 +8,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Bot Configuration
+# The Flask API does not need the Telegram token, but bot.py still requires it
+# when the Telegram worker starts. Keep the token optional at import time so
+# Vercel can load the API function without receiving a bot-only secret.
 BOT_TOKEN = os.getenv('BOT_TOKEN')
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN environment variable is not set. Add it as a Secret.")
 
 OWNER_ID = int(os.getenv('OWNER_ID', '0'))
 
