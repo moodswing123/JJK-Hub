@@ -1,4 +1,4 @@
-# Cursed Realm — JJK RPG Dashboard
+# JJK RPG Dashboard
 
 A professional, responsive player command center for the JJK Telegram RPG. The frontend authenticates players through the Telegram Login Widget, then loads the player profile and dashboard summary from the existing API contract.
 
