@@ -1611,14 +1611,27 @@ async def pvp_bot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'techniques': [],
     }
 
+    bot_starts = random.choice([True, False])
+    opening_text = ""
+    opening_player_hp = player['hp']
+    if bot_starts:
+        opening_damage = game.calculate_damage(bot_player['attack'], player['defense'], target_max_hp=player['max_hp'])
+        opening_player_hp = max(0, player['hp'] - opening_damage)
+        db.update_hp(user.id, opening_player_hp)
+        opening_text = (
+            f"\n⚡ Initiative: **Bot**\n"
+            f"🤖 The bot opens with a basic attack for **{opening_damage}** damage.\n"
+        )
+    else:
+        opening_text = "\n⚡ Initiative: **You**\nYou have the opening move.\n"
     context.user_data['bot_battle'] = {
         'bot_player': bot_player,
         'bot_char': db.get_character(bot_player['character_id']),
         'turn': 1,
-        'player_hp': player['hp'],
+        'player_hp': opening_player_hp,
         'bot_hp': bot_player['hp'],
+        'initiative': 'bot' if bot_starts else 'player',
     }
-
     player_char = db.get_character(player['character_id'])
     bot_char = context.user_data['bot_battle']['bot_char']
     char_attacks = player_char.get('attacks', []) if player_char else []
@@ -1631,6 +1644,7 @@ async def pvp_bot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🤖 Bot Opponent ({bot_char['name'] if bot_char else 'Unknown'})\n"
         f"  ❤️ {bot_player['hp']}/{bot_player['max_hp']} | ⚔️ {bot_player['attack']}\n\n"
         f"{'━' * 22}\n"
+        f"{opening_text}\n"
         f"**Your Attacks:**\n"
         f"  /a attack — Basic strike (free)\n"
         f"{atk_hint}\n\n"
