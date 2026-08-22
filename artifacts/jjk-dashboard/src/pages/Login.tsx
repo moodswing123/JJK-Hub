@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const telegramBotUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME?.trim();
   const loginMutation = useTelegramLogin();
   const widgetContainer = useRef<HTMLDivElement>(null);
 
@@ -21,10 +22,11 @@ export default function Login() {
   useEffect(() => {
     if (!widgetContainer.current) return;
     widgetContainer.current.innerHTML = '';
+    if (!telegramBotUsername) return;
 
     const script = document.createElement('script');
     script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.setAttribute('data-telegram-login', 'JJK_RPG_Bot');
+    script.setAttribute('data-telegram-login', telegramBotUsername);
     script.setAttribute('data-size', 'large');
     script.setAttribute('data-radius', '10');
     script.setAttribute('data-request-access', 'write');
@@ -46,7 +48,7 @@ export default function Login() {
 
     widgetContainer.current.appendChild(script);
     return () => { delete (window as any).onTelegramAuth; };
-  }, [loginMutation, setLocation]);
+  }, [loginMutation, setLocation, telegramBotUsername]);
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center relative overflow-hidden bg-grid-pattern">
@@ -88,7 +90,11 @@ export default function Login() {
           <h2 className="text-xl font-display font-bold mb-2 text-center">Authenticate to Continue</h2>
           <p className="text-sm text-muted-foreground mb-8 text-center">Connect your Telegram account to enter the Jujutsu Kaisen world</p>
 
-          {loginMutation.isPending ? (
+          {!telegramBotUsername ? (
+            <div className="w-full rounded-lg border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-center text-sm text-amber-200">
+              Telegram authentication is not configured for this deployment. Set <code className="font-mono text-xs">VITE_TELEGRAM_BOT_USERNAME</code> to the bot username to enable sign-in.
+            </div>
+          ) : loginMutation.isPending ? (
             <div className="flex flex-col items-center gap-4 py-4">
               <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
               <p className="text-sm text-muted-foreground font-mono">Verifying sorcerer identity...</p>

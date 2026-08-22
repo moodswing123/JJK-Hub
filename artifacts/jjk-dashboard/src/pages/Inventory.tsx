@@ -37,7 +37,7 @@ export default function Inventory() {
 
   const handleUse = async (id: number) => {
     try {
-      await useMutation.mutateAsync({ data: { item_id: id } });
+      await useMutation.mutateAsync({ itemId: id });
       queryClient.invalidateQueries({ queryKey: getListInventoryQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetMyPlayerQueryKey() });
     } catch(e) {}
@@ -45,7 +45,7 @@ export default function Inventory() {
 
   const handleSell = async (id: number) => {
     try {
-      await sellMutation.mutateAsync({ data: { item_id: id, quantity: 1 } });
+      await sellMutation.mutateAsync({ itemId: id });
       queryClient.invalidateQueries({ queryKey: getListInventoryQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetMyPlayerQueryKey() });
     } catch(e) {}

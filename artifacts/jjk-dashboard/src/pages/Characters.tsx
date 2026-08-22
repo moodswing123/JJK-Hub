@@ -24,7 +24,7 @@ const GRADE_BG: Record<string, string> = {
 
 export default function Characters() {
   const { data: characters, isLoading: charsLoading } = useListCharacters();
-  const { data: player, isLoading: playerLoading } = useGetMyPlayer({ query: { retry: false } });
+  const { data: player, isLoading: playerLoading } = useGetMyPlayer({ query: { queryKey: getGetMyPlayerQueryKey(), retry: false } });
   const equipMutation = useEquipCharacter();
   const queryClient = useQueryClient();
   const [selectedChar, setSelectedChar] = React.useState<number | null>(null);

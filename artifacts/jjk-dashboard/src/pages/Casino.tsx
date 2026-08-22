@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useGetCasinoStats, usePlayCoinFlip, useGetMyPlayer } from '@workspace/api-client-react';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input } from '@/components/ui/core';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Coins, Dice5, RotateCcw, AlertTriangle, TrendingUp, History, Badge } from 'lucide-react';
+import { Coins, Dice5, RotateCcw, AlertTriangle, TrendingUp, History } from 'lucide-react';
+import { Badge } from '@/components/ui/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { getGetMyPlayerQueryKey, getGetCasinoStatsQueryKey } from '@workspace/api-client-react';
 
@@ -14,7 +15,7 @@ const GAMES = [
 
 export default function Casino() {
   const { data: stats } = useGetCasinoStats();
-  const { data: player } = useGetMyPlayer({ query: { retry: false } });
+  const { data: player } = useGetMyPlayer({ query: { queryKey: getGetMyPlayerQueryKey(), retry: false } });
   const [selectedGame, setSelectedGame] = useState('coinflip');
   const [bet, setBet] = useState('');
   const [choice, setChoice] = useState('heads');

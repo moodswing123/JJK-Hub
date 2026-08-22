@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useGetMe, useAdminListUsers, useGetAdminAnalytics } from '@workspace/api-client-react';
+import { useGetMe, useAdminListUsers, useGetAdminAnalytics, getGetAdminAnalyticsQueryKey, getAdminListUsersQueryKey } from '@workspace/api-client-react';
 import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui/core';
 import { ShieldAlert, Users, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useLocation } from 'wouter';
@@ -9,8 +9,8 @@ export default function Admin() {
   const [, setLocation] = useLocation();
   const [tab, setTab] = useState<'users' | 'analytics'>('analytics');
   
-  const { data: analytics, isLoading: analyticsLoading } = useGetAdminAnalytics({ query: { enabled: !!me?.is_admin } });
-  const { data: usersData, isLoading: usersLoading } = useAdminListUsers({ limit: 20 }, { query: { enabled: !!me?.is_admin && tab === 'users' } });
+  const { data: analytics, isLoading: analyticsLoading } = useGetAdminAnalytics({ query: { queryKey: getGetAdminAnalyticsQueryKey(), enabled: !!me?.is_admin } });
+  const { data: usersData, isLoading: usersLoading } = useAdminListUsers({ limit: 20 }, { query: { queryKey: getAdminListUsersQueryKey({ limit: 20 }), enabled: !!me?.is_admin && tab === 'users' } });
 
   React.useEffect(() => {
     if (!meLoading && me && !me.is_admin) {

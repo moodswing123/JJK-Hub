@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation, Link, Redirect } from 'wouter';
-import { useGetMe, useLogout, useListNotifications, getListNotificationsQueryKey } from '@workspace/api-client-react';
+import { useGetMe, useLogout, useListNotifications, getListNotificationsQueryKey, getGetMeQueryKey } from '@workspace/api-client-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Home, Users, ShoppingCart, Briefcase, Trophy, Coins, 
@@ -36,7 +36,7 @@ function AuthenticatedShell({
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (v: boolean) => void;
 }) {
-  const { data: me, isLoading, isError } = useGetMe({ query: { retry: false, staleTime: 30_000 } });
+  const { data: me, isLoading, isError } = useGetMe({ query: { queryKey: getGetMeQueryKey(), retry: false, staleTime: 30_000 } });
   const logout = useLogout();
   const { data: notifications } = useListNotifications({ query: { staleTime: 60_000, queryKey: getListNotificationsQueryKey() } });
   const unreadCount = notifications?.filter(n => !n.read).length ?? 0;
@@ -81,8 +81,8 @@ function AuthenticatedShell({
           JJK RPG
         </div>
         <div className="flex items-center gap-4">
-          <Link href="/notifications">
-            <button className="relative text-muted-foreground hover:text-white transition-colors" data-testid="button-notifications-mobile">
+          <Link href="/transactions">
+            <button className="relative text-muted-foreground hover:text-white transition-colors" data-testid="button-notifications-mobile" aria-label="View notifications and history">
               <Bell size={20} />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full text-[10px] flex items-center justify-center text-white font-bold">
