@@ -105,10 +105,10 @@ def build_web_conversation(db) -> ConversationHandler:
         except Exception:
             pass
         if len(value) < 10 or len(value) > 128:
-            await message.reply_text("Password length must be between 10 and 128 characters. Please send it again.")
+            await update.effective_chat.send_message("Password length must be between 10 and 128 characters. Please send it again.")
             return PASSWORD
         context.user_data["web_password"] = value
-        await message.reply_text("Password received. Send it one more time to confirm.")
+        await update.effective_chat.send_message("Password received. Send it one more time to confirm.")
         return CONFIRM_PASSWORD
 
     async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -121,7 +121,7 @@ def build_web_conversation(db) -> ConversationHandler:
         password_value: Optional[str] = context.user_data.get("web_password")
         if not password_value or value != password_value:
             context.user_data.pop("web_password", None)
-            await message.reply_text("The passwords did not match. Please send a new password.")
+            await update.effective_chat.send_message("The passwords did not match. Please send a new password.")
             return PASSWORD
         user = update.effective_user
         db.get_or_create_player(user.id, user.username or "", user.full_name or f"Player {user.id}")
@@ -130,11 +130,11 @@ def build_web_conversation(db) -> ConversationHandler:
             db.save_dashboard_credentials(user.id, username_value, _hash_password(password_value))
         except Exception:
             context.user_data.clear()
-            await message.reply_text("I could not save your dashboard access right now. Please try /web again later.")
+            await update.effective_chat.send_message("I could not save your dashboard access right now. Please try /web again later.")
             return ConversationHandler.END
         context.user_data.clear()
         # Send the login link immediately after the credentials are persisted.
-        await message.reply_text(
+        await update.effective_chat.send_message(
             f"✅ Dashboard access created for *{username_value}*.\n\nOpen your dashboard now: {_dashboard_url()}",
             parse_mode="Markdown",
             disable_web_page_preview=True,
