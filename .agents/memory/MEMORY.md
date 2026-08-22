@@ -1,4 +1,0 @@
-- [JJK Dashboard Architecture](jjk-dashboard-arch.md) — dual-artifact: api-server at /api (port 8080), jjk-dashboard at / (port 24438); no Vite proxy needed — Replit routes /api/* directly to the API server
-- [JJK Auth Pattern](jjk-auth.md) — JWT in localStorage; Login page checks localStorage only; Shell auth check in AuthenticatedShell component; never call useGetMe on login page or auth loops result
-- [JJK Codegen Fix](jjk-codegen.md) — Orval v8 + Zod v3: codegen script must sed-replace zod.int() → zod.number() after every orval run; type:integer → type:number in OpenAPI spec
-- [JJK Tailwind Layer Rule](jjk-tailwind.md) — Tailwind v4: @apply inside @layer utilities is forbidden; move @apply-using custom classes to @layer components instead
