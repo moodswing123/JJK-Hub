@@ -1,140 +1,62 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import { ArrowRight, Bot, LockKeyhole, Radio, ShieldCheck } from 'lucide-react';
 import { useLocation } from 'wouter';
 import { useTelegramLogin } from '@workspace/api-client-react';
 import { setAuthTokenGetter } from '@workspace/api-client-react/custom-fetch';
-import { motion } from 'framer-motion';
+import { Card, Button } from '@/components/ui/core';
+
+type TelegramUser = {
+  id: number;
+  first_name: string;
+  last_name?: string | null;
+  username?: string | null;
+  photo_url?: string | null;
+  auth_date: number;
+  hash: string;
+};
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const telegramBotUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME?.trim();
   const loginMutation = useTelegramLogin();
   const widgetContainer = useRef<HTMLDivElement>(null);
+  const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME?.trim().replace(/^@+/, '');
 
-  // If already logged in, redirect immediately
   useEffect(() => {
     const token = localStorage.getItem('jjk_token');
-    if (token) {
-      setAuthTokenGetter(() => token);
-      setLocation('/dashboard');
-    }
+    if (token) { setAuthTokenGetter(() => token); setLocation('/dashboard'); }
   }, [setLocation]);
 
   useEffect(() => {
-    if (!widgetContainer.current) return;
-    widgetContainer.current.innerHTML = '';
-    if (!telegramBotUsername) return;
-
+    const container = widgetContainer.current;
+    if (!container) return;
+    container.innerHTML = '';
+    if (!botUsername) return;
     const script = document.createElement('script');
     script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.setAttribute('data-telegram-login', telegramBotUsername);
+    script.async = true;
+    script.setAttribute('data-telegram-login', botUsername);
     script.setAttribute('data-size', 'large');
     script.setAttribute('data-radius', '10');
     script.setAttribute('data-request-access', 'write');
     script.setAttribute('data-userpic', 'false');
     script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-
-    (window as any).onTelegramAuth = async (user: any) => {
+    (window as unknown as { onTelegramAuth?: (user: TelegramUser) => void }).onTelegramAuth = async (user: TelegramUser) => {
       try {
         const result = await loginMutation.mutateAsync({ data: user });
-        if (result.token) {
-          localStorage.setItem('jjk_token', result.token);
-          setAuthTokenGetter(() => result.token);
-          setLocation('/dashboard');
-        }
-      } catch (err) {
-        console.error('Login failed', err);
-      }
+        if (result.token) { localStorage.setItem('jjk_token', result.token); setAuthTokenGetter(() => result.token); setLocation('/dashboard'); }
+      } catch (error) { console.error('Telegram authentication failed', error); }
     };
+    container.appendChild(script);
+    return () => { container.innerHTML = ''; delete (window as unknown as { onTelegramAuth?: unknown }).onTelegramAuth; };
+  }, [botUsername, loginMutation, setLocation]);
 
-    widgetContainer.current.appendChild(script);
-    return () => { delete (window as any).onTelegramAuth; };
-  }, [loginMutation, setLocation, telegramBotUsername]);
-
-  return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center relative overflow-hidden bg-grid-pattern">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0)_0%,rgba(0,0,0,0.8)_100%)] z-0" />
-      <motion.div
-        animate={{ scale: [1, 1.05, 1], opacity: [0.3, 0.5, 0.3] }}
-        transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/20 rounded-full blur-[150px] mix-blend-screen z-0 pointer-events-none"
-      />
-      <motion.div
-        animate={{ scale: [1, 1.1, 1], opacity: [0.2, 0.4, 0.2] }}
-        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-        className="absolute top-1/3 right-1/4 w-[600px] h-[600px] bg-secondary/30 rounded-full blur-[120px] mix-blend-screen z-0 pointer-events-none"
-      />
-
-      <div className="relative z-10 w-full max-w-md p-8 flex flex-col items-center">
-        <motion.div
-          initial={{ y: -50, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.8, ease: 'easeOut' }}
-          className="text-center mb-12"
-        >
-          <h1 className="font-display font-black text-6xl md:text-8xl tracking-tighter bg-gradient-to-b from-white via-white to-white/40 bg-clip-text text-transparent text-glow mb-4">
-            JJK RPG
-          </h1>
-          <p className="text-muted-foreground tracking-[0.3em] uppercase text-sm font-semibold font-mono">
-            Sorcerer Interface System
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="glass-card w-full p-8 flex flex-col items-center relative overflow-hidden"
-        >
-          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent" />
-
-          <h2 className="text-xl font-display font-bold mb-2 text-center">Authenticate to Continue</h2>
-          <p className="text-sm text-muted-foreground mb-8 text-center">Connect your Telegram account to enter the Jujutsu Kaisen world</p>
-
-          {!telegramBotUsername ? (
-            <div className="w-full rounded-lg border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-center text-sm text-amber-200">
-              Telegram authentication is not configured for this deployment. Set <code className="font-mono text-xs">VITE_TELEGRAM_BOT_USERNAME</code> to the bot username to enable sign-in.
-            </div>
-          ) : loginMutation.isPending ? (
-            <div className="flex flex-col items-center gap-4 py-4">
-              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm text-muted-foreground font-mono">Verifying sorcerer identity...</p>
-            </div>
-          ) : loginMutation.isError ? (
-            <div className="flex flex-col items-center gap-4 py-2 w-full">
-              <div className="w-full p-3 rounded-lg bg-destructive/20 border border-destructive/40 text-destructive text-sm text-center">
-                Authentication failed. Please try again.
-              </div>
-              <div ref={widgetContainer} className="min-h-[40px] flex items-center justify-center" />
-            </div>
-          ) : (
-            <div ref={widgetContainer} className="min-h-[40px] flex items-center justify-center" data-testid="container-telegram-widget" />
-          )}
-
-          <div className="mt-8 text-xs text-muted-foreground text-center font-mono">
-            CONNECTION SECURE // CURSED SEAL ENCRYPTED
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1 }}
-          className="mt-8 text-center"
-        >
-          <p className="text-xs text-muted-foreground/50 font-mono">
-            Need Yen? Contact{' '}
-            <a
-              href="https://t.me/victory_tech"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-accent hover:text-accent/80 transition-colors underline underline-offset-2"
-              data-testid="link-contact-seller"
-            >
-              @victory_tech
-            </a>
-          </p>
-        </motion.div>
-      </div>
-    </div>
-  );
+  return <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-12"><div className="pointer-events-none absolute inset-0 bg-grid-pattern opacity-60" /><div className="pointer-events-none absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[130px]" />
+    <div className="relative z-10 w-full max-w-[28rem]"><div className="mb-10 text-center"><div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-2xl shadow-primary/25"><Bot size={30} /></div><p className="section-label mb-3 text-primary">JJK RPG // Secure gateway</p><h1 className="font-display text-4xl font-semibold tracking-tight sm:text-5xl">Enter the realm.</h1><p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-muted-foreground">Your command center for progression, combat, and cursed energy management.</p></div>
+      <Card className="border-border/80 bg-card/90 p-1 shadow-2xl shadow-black/30"><div className="rounded-xl border border-border/50 bg-background/30 p-6 sm:p-8"><div className="mb-8 flex items-center justify-between"><div><p className="section-label mb-1">Identity check</p><h2 className="text-xl font-semibold">Connect Telegram</h2></div><LockKeyhole size={20} className="text-primary" /></div><p className="mb-7 text-sm leading-6 text-muted-foreground">Sign in with the Telegram account linked to your JJK RPG character. Your player data stays synchronized with the game.</p>
+        {loginMutation.isPending ? <div className="flex flex-col items-center gap-4 rounded-xl border border-border/60 bg-muted/30 py-8"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /><p className="text-sm text-muted-foreground">Verifying your sorcerer identity…</p></div> : !botUsername ? <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">Telegram login is not configured. Set <code className="font-mono text-xs">VITE_TELEGRAM_BOT_USERNAME</code> in the frontend deployment.</div> : <div ref={widgetContainer} className="flex min-h-12 justify-center" data-testid="telegram-login-widget" />}
+        {loginMutation.isError && <p className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-center text-xs text-destructive-foreground">Authentication was declined. Please try connecting again.</p>}
+        <div className="mt-8 grid grid-cols-3 gap-2 border-t border-border/60 pt-5 text-center"><Trust icon={ShieldCheck} label="Verified" /><Trust icon={Radio} label="Live sync" /><Trust icon={ArrowRight} label="Fast entry" /></div>
+      </div></Card><p className="mt-6 text-center text-xs text-muted-foreground">Need Yen or support? <a className="text-accent hover:underline" href="https://t.me/victory_tech" target="_blank" rel="noreferrer">Contact @victory_tech</a></p></div></main>;
 }
+function Trust({ icon: Icon, label }: { icon: React.ElementType; label: string }) { return <div className="flex flex-col items-center gap-1.5 text-[10px] uppercase tracking-wider text-muted-foreground"><Icon size={14} className="text-accent" />{label}</div>; }

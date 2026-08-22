@@ -1,233 +1,51 @@
-import React from 'react';
-import { useGetDashboardSummary } from '@workspace/api-client-react';
-import { Card, CardContent, CardHeader, CardTitle, Progress, Badge, Button } from '@/components/ui/core';
 import { motion } from 'framer-motion';
-import { Link } from 'wouter';
-import { Swords, Shield, Zap, TrendingUp, ChevronRight, Activity, Bell } from 'lucide-react';
+import { Activity, ArrowUpRight, Bell, Coins, HeartPulse, Shield, Sparkles, Swords, Trophy, Zap } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { Link } from 'wouter';
+import { useGetDashboardSummary } from '@workspace/api-client-react';
+import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Progress } from '@/components/ui/core';
+
+const percent = (value: number, max: number) => max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
+const number = (value: number) => value.toLocaleString();
 
 export default function Dashboard() {
-  const { data: summary, isLoading } = useGetDashboardSummary();
+  const { data: summary, isLoading, isError } = useGetDashboardSummary();
+  if (isLoading) return <DashboardSkeleton />;
+  if (isError || !summary) return <ErrorState />;
 
-  if (isLoading || !summary) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-40 glass-card rounded-xl"></div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="h-64 glass-card rounded-xl"></div>
-          <div className="h-64 glass-card rounded-xl col-span-2"></div>
-        </div>
+  const { player, online_count, recent_activity = [], announcements = [], daily_status } = summary;
+  const stats = [
+    { label: 'Attack', value: player.attack, icon: Swords, tone: 'text-primary' },
+    { label: 'Defense', value: player.defense, icon: Shield, tone: 'text-accent' },
+    { label: 'Speed', value: player.speed, icon: Zap, tone: 'text-amber-300' },
+    { label: 'Battles won', value: player.wins, icon: Trophy, tone: 'text-emerald-300' },
+  ];
+
+  return <div className="space-y-8">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+      <div><p className="section-label mb-2">Welcome back, sorcerer</p><h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Your realm at a glance</h1><p className="mt-2 max-w-xl text-sm text-muted-foreground">Track your progression, manage your arsenal, and stay ahead of the curse outbreak.</p></div>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,.8)]" /> {online_count} players active</div>
+    </motion.div>
+
+    <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-card to-card p-6 shadow-2xl shadow-black/20 sm:p-8">
+      <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-primary/15 blur-3xl" />
+      <div className="relative grid gap-8 lg:grid-cols-[1fr_auto] lg:items-center">
+        <div className="flex items-start gap-4 sm:gap-6"><div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-primary/30 bg-background/70 text-2xl font-semibold text-primary sm:h-20 sm:w-20">{player.avatar_url ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" /> : player.display_name.charAt(0).toUpperCase()}</div><div className="min-w-0"><div className="mb-2 flex flex-wrap items-center gap-2"><h2 className="truncate text-2xl font-semibold sm:text-3xl">{player.display_name}</h2><Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary">LVL {player.level}</Badge></div><p className="section-label">{player.rank} · {player.equipped_title || 'Unbound sorcerer'}</p><div className="mt-6 grid max-w-xl gap-3 sm:grid-cols-3"><Meter label="HP" value={player.hp} max={player.max_hp} color="bg-emerald-400" /><Meter label="Cursed energy" value={player.cursed_energy} max={player.max_cursed_energy} color="bg-accent" /><Meter label="Experience" value={player.xp} max={player.xp_needed} color="bg-primary" /></div></div></div>
+        <div className="grid grid-cols-2 gap-3 sm:min-w-[280px]"><ValueTile label="Yen balance" value={`¥${number(player.yen)}`} icon={Coins} tone="text-amber-300" /><ValueTile label="Win rate" value={`${player.win_rate.toFixed(1)}%`} icon={Trophy} tone="text-emerald-300" /></div>
       </div>
-    );
-  }
+    </motion.section>
 
-  const { player, online_count, recent_activity, announcements, daily_status } = summary;
-  const xpPercent = Math.min(100, (player.xp / player.xp_needed) * 100);
-  const hpPercent = Math.min(100, (player.hp / player.max_hp) * 100);
-  const cePercent = Math.min(100, (player.cursed_energy / player.max_cursed_energy) * 100);
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{stats.map(({ label, value, icon: Icon, tone }, index) => <motion.div key={label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * .05 }}><Card className="h-full"><CardContent className="flex items-center justify-between p-5"><div><p className="section-label mb-2">{label}</p><p className="text-2xl font-semibold">{number(value)}</p></div><div className={`rounded-xl bg-muted/70 p-3 ${tone}`}><Icon size={19} /></div></CardContent></Card></motion.div>)}</div>
 
-  return (
-    <div className="space-y-8 pb-12">
-      {/* Header Profile Summary */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card rounded-2xl p-6 md:p-8 relative overflow-hidden"
-      >
-        <div className="absolute top-0 right-0 p-4 text-xs font-mono text-muted-foreground flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          {online_count} ONLINE
-        </div>
-        
-        <div className="flex flex-col md:flex-row gap-6 md:items-center relative z-10">
-          <div className="w-24 h-24 md:w-32 md:h-32 rounded-xl overflow-hidden border-2 border-primary/30 shadow-[0_0_30px_rgba(255,0,0,0.2)] shrink-0">
-            {player.avatar_url ? (
-              <img src={player.avatar_url} alt={player.display_name} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-primary/20 flex items-center justify-center text-4xl font-bold text-primary">
-                {player.display_name.charAt(0)}
-              </div>
-            )}
-          </div>
-          
-          <div className="flex-1 space-y-4">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-3xl md:text-4xl font-display font-bold text-white">{player.display_name}</h1>
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 px-3 py-1">
-                  LVL {player.level}
-                </Badge>
-              </div>
-              <div className="text-muted-foreground font-mono text-sm tracking-widest">{player.rank}</div>
-            </div>
-            
-            <div className="space-y-3 max-w-xl">
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-green-400">HP {player.hp}/{player.max_hp}</span>
-                </div>
-                <Progress value={hpPercent} indicatorClassName="bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]" className="h-1.5 bg-green-950/50" />
-              </div>
-              
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-blue-400">CE {player.cursed_energy}/{player.max_cursed_energy}</span>
-                </div>
-                <Progress value={cePercent} indicatorClassName="bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" className="h-1.5 bg-blue-950/50" />
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-primary">XP {player.xp}/{player.xp_needed}</span>
-                </div>
-                <Progress value={xpPercent} indicatorClassName="bg-primary shadow-[0_0_10px_rgba(255,0,0,0.5)]" className="h-1.5 bg-primary/20" />
-              </div>
-            </div>
-          </div>
-          
-          <div className="flex flex-row md:flex-col gap-4 shrink-0 mt-4 md:mt-0">
-            <div className="bg-black/40 border border-white/5 rounded-lg p-4 text-center min-w-[120px]">
-              <div className="text-xs text-muted-foreground font-mono mb-1">YEN BALANCE</div>
-              <div className="text-xl font-bold font-mono text-yellow-400 text-glow">¥{player.yen.toLocaleString()}</div>
-            </div>
-            <div className="bg-black/40 border border-white/5 rounded-lg p-4 text-center min-w-[120px]">
-              <div className="text-xs text-muted-foreground font-mono mb-1">WIN RATE</div>
-              <div className="text-xl font-bold font-mono text-white">{(player.win_rate * 100).toFixed(1)}%</div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Left Column */}
-        <div className="space-y-8">
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
-            <Card>
-              <CardHeader className="pb-3 border-b border-white/5">
-                <CardTitle className="text-sm tracking-widest text-muted-foreground flex items-center gap-2">
-                  <Activity size={16} />
-                  COMBAT STATS
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <div className="w-8 h-8 rounded bg-red-500/10 flex items-center justify-center text-red-500">
-                        <Swords size={18} />
-                      </div>
-                      <span className="font-mono text-sm">ATTACK</span>
-                    </div>
-                    <span className="font-mono font-bold">{player.attack.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <div className="w-8 h-8 rounded bg-blue-500/10 flex items-center justify-center text-blue-500">
-                        <Shield size={18} />
-                      </div>
-                      <span className="font-mono text-sm">DEFENSE</span>
-                    </div>
-                    <span className="font-mono font-bold">{player.defense.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <div className="w-8 h-8 rounded bg-yellow-500/10 flex items-center justify-center text-yellow-500">
-                        <Zap size={18} />
-                      </div>
-                      <span className="font-mono text-sm">SPEED</span>
-                    </div>
-                    <span className="font-mono font-bold">{player.speed.toLocaleString()}</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-            <Card className="bg-gradient-to-br from-primary/10 to-transparent border-primary/20">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm tracking-widest flex items-center gap-2">
-                  <TrendingUp size={16} className="text-primary" />
-                  DAILY REWARDS
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center text-center space-y-4">
-                  <div className="text-4xl font-display font-bold text-primary">
-                    {daily_status?.streak || 0} <span className="text-xl text-muted-foreground">DAYS</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {daily_status?.can_claim ? 'Your daily reward is ready!' : 'Already claimed today.'}
-                  </p>
-                  <Link href="/daily" className="w-full">
-                    <Button variant={daily_status?.can_claim ? 'default' : 'secondary'} className="w-full">
-                      {daily_status?.can_claim ? 'CLAIM REWARD' : 'VIEW MISSIONS'}
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Middle & Right Column */}
-        <div className="md:col-span-2 space-y-8">
-          
-          {announcements.length > 0 && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-              <Card className="border-secondary/30 bg-secondary/5">
-                <CardHeader className="pb-4">
-                  <CardTitle className="text-sm tracking-widest flex items-center gap-2 text-secondary-foreground">
-                    <Bell size={16} />
-                    ANNOUNCEMENTS
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {announcements.slice(0,2).map(ann => (
-                    <div key={ann.id} className="p-4 rounded-lg bg-black/40 border border-white/5">
-                      <div className="flex justify-between items-start mb-2">
-                        <h4 className="font-bold text-lg">{ann.title}</h4>
-                        <span className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(ann.created_at))} ago</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{ann.content}</p>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-white/5">
-                <CardTitle className="text-sm tracking-widest">RECENT ACTIVITY</CardTitle>
-                <Link href="/profile">
-                  <Button variant="ghost" size="sm" className="text-xs h-8 text-muted-foreground">View All <ChevronRight size={14} /></Button>
-                </Link>
-              </CardHeader>
-              <CardContent className="pt-4">
-                <div className="space-y-4">
-                  {recent_activity.length > 0 ? recent_activity.map((entry) => (
-                    <div key={entry.id} className="flex gap-4 items-start pb-4 border-b border-white/5 last:border-0 last:pb-0">
-                      <div className="w-2 h-2 rounded-full bg-primary mt-2 shadow-[0_0_8px_rgba(255,0,0,0.8)]"></div>
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-300">{entry.message}</p>
-                        <span className="text-xs text-muted-foreground font-mono mt-1 block">
-                          {formatDistanceToNow(new Date(entry.created_at))} ago
-                        </span>
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="text-center py-8 text-muted-foreground text-sm">
-                      No recent activity. Get out there and exorcise some curses!
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-      </div>
+    <div className="grid gap-6 xl:grid-cols-[1.35fr_.65fr]">
+      <Card><CardHeader className="flex-row items-center justify-between border-b border-border/60"><div><p className="section-label mb-1">Live feed</p><CardTitle>Recent activity</CardTitle></div><Link href="/transactions"><Button variant="ghost" size="sm">View history <ArrowUpRight size={14} className="ml-1" /></Button></Link></CardHeader><CardContent className="p-0">{recent_activity.length ? recent_activity.slice(0, 5).map((entry) => <div key={entry.id} className="flex gap-4 border-b border-border/50 px-6 py-4 last:border-0"><div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary)/.8)]" /><div className="min-w-0"><p className="text-sm text-foreground/90">{entry.message}</p><p className="mt-1 text-xs text-muted-foreground">{formatDistanceToNow(new Date(entry.created_at), { addSuffix: true })}</p></div></div>) : <EmptyState icon={Activity} label="No activity yet" detail="Your next action will appear here." />}</CardContent></Card>
+      <div className="space-y-6"><Card className="border-primary/20 bg-primary/5"><CardHeader><p className="section-label mb-1">Daily ritual</p><CardTitle className="flex items-center gap-2"><Sparkles size={18} className="text-primary" /> Keep your streak alive</CardTitle></CardHeader><CardContent><div className="mb-5 flex items-end justify-between"><div><p className="text-4xl font-semibold text-primary">{daily_status?.streak || 0}</p><p className="text-xs text-muted-foreground">consecutive days</p></div><HeartPulse size={36} className="text-primary/40" /></div><Link href="/daily"><Button className="w-full">{daily_status?.can_claim ? 'Claim today’s reward' : 'View daily missions'}</Button></Link></CardContent></Card>{announcements[0] && <Card><CardHeader><p className="section-label mb-1">Realm bulletin</p><CardTitle className="flex items-center gap-2"><Bell size={17} /> {announcements[0].title}</CardTitle></CardHeader><CardContent><p className="text-sm leading-6 text-muted-foreground">{announcements[0].content}</p></CardContent></Card>}</div>
     </div>
-  );
+  </div>;
 }
+
+function Meter({ label, value, max, color }: { label: string; value: number; max: number; color: string }) { return <div><div className="mb-1.5 flex justify-between text-[10px] uppercase tracking-wider text-muted-foreground"><span>{label}</span><span className="font-mono">{number(value)} / {number(max)}</span></div><Progress value={percent(value, max)} indicatorClassName={color} className="h-1.5 bg-background/70" /></div>; }
+function ValueTile({ label, value, icon: Icon, tone }: { label: string; value: string; icon: React.ElementType; tone: string }) { return <div className="rounded-xl border border-border/70 bg-background/50 p-4"><div className="mb-2 flex items-center gap-2"><Icon size={14} className={tone} /><span className="section-label !text-[9px]">{label}</span></div><p className="font-mono text-lg font-semibold">{value}</p></div>; }
+function EmptyState({ icon: Icon, label, detail }: { icon: React.ElementType; label: string; detail: string }) { return <div className="flex flex-col items-center justify-center py-12 text-center"><Icon size={24} className="mb-3 text-muted-foreground/50" /><p className="text-sm font-medium">{label}</p><p className="mt-1 text-xs text-muted-foreground">{detail}</p></div>; }
+function DashboardSkeleton() { return <div className="animate-pulse space-y-6"><div className="h-20 w-2/3 rounded-xl bg-muted/50" /><div className="h-56 rounded-2xl bg-muted/50" /><div className="grid gap-4 sm:grid-cols-4">{[1,2,3,4].map((value) => <div key={value} className="h-28 rounded-xl bg-muted/50" />)}</div></div>; }
+function ErrorState() { return <Card className="mx-auto max-w-xl"><CardContent className="p-10 text-center"><p className="section-label mb-3 text-primary">Connection interrupted</p><h1 className="text-2xl font-semibold">The realm could not be reached</h1><p className="mt-2 text-sm text-muted-foreground">Check that the API deployment and database are available, then refresh the page.</p><Button className="mt-6" onClick={() => window.location.reload()}>Try again</Button></CardContent></Card>; }

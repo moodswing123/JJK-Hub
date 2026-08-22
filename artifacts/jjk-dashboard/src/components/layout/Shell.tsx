@@ -1,202 +1,74 @@
 import React from 'react';
-import { useLocation, Link, Redirect } from 'wouter';
-import { useGetMe, useLogout, useListNotifications, getListNotificationsQueryKey, getGetMeQueryKey } from '@workspace/api-client-react';
+import { Link, Redirect, useLocation } from 'wouter';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Home, Users, ShoppingCart, Briefcase, Trophy, Coins, 
-  Store, Calendar, History, Shield, User, LogOut, Bell,
-  Menu, X
-} from 'lucide-react';
+import { useGetMe, useLogout, useListNotifications, getGetMeQueryKey, getListNotificationsQueryKey } from '@workspace/api-client-react';
+import { Bell, BookOpen, BriefcaseBusiness, CalendarDays, ChevronRight, Coins, Compass, Crown, Gamepad2, LayoutDashboard, LogOut, Menu, Package, Shield, ShoppingBag, Swords, Trophy, UserRound, X } from 'lucide-react';
 import { Button } from '@/components/ui/core';
+
+const navItems = [
+  { label: 'Overview', path: '/dashboard', icon: LayoutDashboard },
+  { label: 'My profile', path: '/profile', icon: UserRound },
+  { label: 'Characters', path: '/characters', icon: Swords },
+  { label: 'Inventory', path: '/inventory', icon: Package },
+  { label: 'Daily missions', path: '/daily', icon: CalendarDays },
+  { label: 'Leaderboard', path: '/leaderboard', icon: Trophy },
+  { label: 'Marketplace', path: '/marketplace', icon: Compass },
+  { label: 'Cursed casino', path: '/casino', icon: Coins },
+  { label: 'Shop', path: '/shop', icon: ShoppingBag },
+  { label: 'Transactions', path: '/transactions', icon: BookOpen },
+];
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location, setLocation] = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
-
-  const isLoginPage = location === '/';
-
-  // On the login page, just render children directly (no auth needed)
-  if (isLoginPage) {
-    return <>{children}</>;
-  }
-
-  return <AuthenticatedShell onLocation={setLocation} location={location} mobileMenuOpen={mobileMenuOpen} setMobileMenuOpen={setMobileMenuOpen}>{children}</AuthenticatedShell>;
-}
-
-function AuthenticatedShell({
-  children,
-  location,
-  onLocation,
-  mobileMenuOpen,
-  setMobileMenuOpen,
-}: {
-  children: React.ReactNode;
-  location: string;
-  onLocation: (l: string) => void;
-  mobileMenuOpen: boolean;
-  setMobileMenuOpen: (v: boolean) => void;
-}) {
-  const { data: me, isLoading, isError } = useGetMe({ query: { queryKey: getGetMeQueryKey(), retry: false, staleTime: 30_000 } });
+  const [open, setOpen] = React.useState(false);
+  const { data: me, isLoading, isError } = useGetMe({ query: { queryKey: getGetMeQueryKey(), retry: false } });
+  const { data: notifications } = useListNotifications({ query: { queryKey: getListNotificationsQueryKey(), staleTime: 60_000 } });
   const logout = useLogout();
-  const { data: notifications } = useListNotifications({ query: { staleTime: 60_000, queryKey: getListNotificationsQueryKey() } });
-  const unreadCount = notifications?.filter(n => !n.read).length ?? 0;
+  const notificationList = Array.isArray(notifications) ? notifications : [];
+  const unread = notificationList.filter((notification) => !notification.read).length;
 
-  // Redirect to login if not authenticated
-  if (!isLoading && (isError || !me)) {
-    return <Redirect to="/" />;
-  }
+  if (location === '/') return <>{children}</>;
+  if (!isLoading && (isError || !me)) return <Redirect to="/" />;
 
-  const navItems = [
-    { name: 'Dashboard', path: '/dashboard', icon: Home },
-    { name: 'Profile', path: '/profile', icon: User },
-    { name: 'Characters', path: '/characters', icon: Users },
-    { name: 'Inventory', path: '/inventory', icon: Briefcase },
-    { name: 'Shop', path: '/shop', icon: ShoppingCart },
-    { name: 'Marketplace', path: '/marketplace', icon: Store },
-    { name: 'Casino', path: '/casino', icon: Coins },
-    { name: 'Leaderboard', path: '/leaderboard', icon: Trophy },
-    { name: 'Daily', path: '/daily', icon: Calendar },
-    { name: 'History', path: '/transactions', icon: History },
-  ];
-
-  if (me?.is_admin) {
-    navItems.push({ name: 'Admin', path: '/admin', icon: Shield });
-  }
-
+  const items = me?.is_admin ? [...navItems, { label: 'Admin', path: '/admin', icon: Shield }] : navItems;
+  const closeMenu = () => setOpen(false);
   const handleLogout = async () => {
-    try { await logout.mutateAsync(undefined); } catch {}
+    try { await logout.mutateAsync(undefined); } catch { /* token cleanup still matters */ }
     localStorage.removeItem('jjk_token');
-    onLocation('/');
+    setLocation('/');
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground bg-grid-pattern relative overflow-hidden">
-      {/* Background glows */}
-      <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-primary/15 rounded-full blur-[130px] pointer-events-none mix-blend-screen -translate-x-1/2 -translate-y-1/2" />
-      <div className="fixed bottom-0 right-0 w-[500px] h-[500px] bg-secondary/15 rounded-full blur-[130px] pointer-events-none mix-blend-screen translate-x-1/3 translate-y-1/3" />
-
-      {/* Mobile Top Bar */}
-      <div className="md:hidden flex items-center justify-between p-4 glass border-b border-white/5 sticky top-0 z-50">
-        <div className="font-display font-bold text-xl tracking-wider bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-          JJK RPG
-        </div>
-        <div className="flex items-center gap-4">
-          <Link href="/transactions">
-            <button className="relative text-muted-foreground hover:text-white transition-colors" data-testid="button-notifications-mobile" aria-label="View notifications and history">
-              <Bell size={20} />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full text-[10px] flex items-center justify-center text-white font-bold">
-                  {unreadCount > 9 ? '9+' : unreadCount}
-                </span>
-              )}
-            </button>
-          </Link>
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-white" data-testid="button-mobile-menu">
-            {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -left-40 -top-40 h-[34rem] w-[34rem] rounded-full bg-primary/10 blur-[130px]" />
+        <div className="absolute -bottom-48 -right-32 h-[30rem] w-[30rem] rounded-full bg-accent/8 blur-[140px]" />
       </div>
-
-      {/* Sidebar */}
-      <AnimatePresence>
-        {(mobileMenuOpen) && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
-            onClick={() => setMobileMenuOpen(false)}
-          />
-        )}
-      </AnimatePresence>
-
-      <aside className={`fixed md:sticky top-0 left-0 z-40 h-dvh w-64 glass border-r border-white/5 flex flex-col transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
-        {/* Logo */}
-        <div className="p-6 hidden md:flex flex-col">
-          <div className="font-display font-bold text-2xl tracking-widest bg-gradient-to-r from-primary via-accent to-secondary bg-clip-text text-transparent text-glow">
-            JJK RPG
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-xl lg:hidden">
+        <div className="flex h-16 items-center justify-between px-4">
+          <Brand compact />
+          <div className="flex items-center gap-2">
+            <Link href="/transactions"><Button variant="ghost" size="icon" className="relative" aria-label="Open transaction history"><Bell size={18} />{unread > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-primary" />}</Button></Link>
+            <Button variant="ghost" size="icon" onClick={() => setOpen((value) => !value)} aria-label="Toggle navigation">{open ? <X size={20} /> : <Menu size={20} />}</Button>
           </div>
-          <div className="text-xs text-muted-foreground mt-1 tracking-widest uppercase font-mono">Sorcerer Interface</div>
         </div>
-
-        {/* Player mini card */}
-        {me && (
-          <div className="px-4 pb-4">
-            <Link href="/profile">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors" data-testid="link-profile-mini">
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0">
-                  {me.avatar_url ? (
-                    <img src={me.avatar_url} alt={me.display_name} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-primary/20 text-primary font-bold text-sm">
-                      {me.display_name?.charAt(0) ?? '?'}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-bold truncate">{me.display_name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{me.rank}</div>
-                </div>
-              </div>
-            </Link>
-          </div>
-        )}
-
-        {/* Loading skeleton for player card */}
-        {isLoading && (
-          <div className="px-4 pb-4">
-            <div className="h-16 rounded-lg bg-white/5 animate-pulse" />
-          </div>
-        )}
-
-        {/* Nav */}
-        <nav className="flex-1 px-4 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = location === item.path || location.startsWith(`${item.path}/`);
-            const Icon = item.icon;
-            return (
-              <Link href={item.path} key={item.path} onClick={() => setMobileMenuOpen(false)}>
-                <div
-                  data-testid={`link-nav-${item.name.toLowerCase()}`}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-200 ${
-                    isActive
-                      ? 'bg-primary/20 text-primary shadow-[inset_2px_0_0_0_hsl(var(--primary))]'
-                      : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
-                  }`}
-                >
-                  <Icon size={18} />
-                  <span className="font-medium text-sm tracking-wide">{item.name}</span>
-                  {item.name === 'History' && unreadCount > 0 && (
-                    <span className="ml-auto w-5 h-5 bg-primary rounded-full text-[10px] flex items-center justify-center text-white font-bold">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            );
-          })}
+      </header>
+      <AnimatePresence>{open && <motion.button aria-label="Close navigation" className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={closeMenu} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />}</AnimatePresence>
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[17.5rem] flex-col border-r border-border/80 bg-card/95 backdrop-blur-2xl transition-transform duration-200 lg:translate-x-0 ${open ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex h-20 items-center border-b border-border/70 px-6"><Brand /></div>
+        <div className="border-b border-border/70 px-4 py-4">
+          {me ? <Link href="/profile" onClick={closeMenu}><div className="group flex items-center gap-3 rounded-xl border border-border/70 bg-background/50 p-3 transition-colors hover:border-primary/40 hover:bg-primary/5"><Avatar player={me} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{me.display_name}</p><p className="truncate text-xs text-muted-foreground">{me.rank} · Level {me.level}</p></div><ChevronRight size={15} className="text-muted-foreground transition-transform group-hover:translate-x-0.5" /></div></Link> : <div className="h-14 animate-pulse rounded-xl bg-muted/50" />}
+        </div>
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-5">
+          <p className="section-label mb-3 px-3">Command center</p>
+          {items.map(({ label, path, icon: Icon }) => { const active = location === path || location.startsWith(`${path}/`); return <Link key={path} href={path} onClick={closeMenu}><div className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all ${active ? 'bg-primary/12 text-foreground shadow-[inset_2px_0_0_hsl(var(--primary))]' : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'}`}><Icon size={17} className={active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground'} /><span className="flex-1">{label}</span>{label === 'Transactions' && unread > 0 && <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">{unread > 9 ? '9+' : unread}</span>}</div></Link>; })}
         </nav>
-
-        {/* Logout */}
-        <div className="p-4 mt-auto border-t border-white/5">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            onClick={handleLogout}
-            data-testid="button-logout"
-          >
-            <LogOut size={18} className="mr-3" />
-            Logout
-          </Button>
-        </div>
+        <div className="border-t border-border/70 p-4"><Button variant="ghost" className="w-full justify-start gap-3 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={handleLogout}><LogOut size={17} /> Sign out</Button></div>
       </aside>
-
-      {/* Main content */}
-      <main className="flex-1 h-dvh overflow-y-auto relative z-10 scroll-smooth">
-        <div className="max-w-7xl mx-auto p-4 md:p-8">
-          {children}
-        </div>
-      </main>
+      <main className="relative min-h-screen lg:pl-[17.5rem]"><div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-6 lg:px-10 lg:py-9">{children}</div></main>
     </div>
   );
 }
+
+function Brand({ compact = false }: { compact?: boolean }) { return <Link href="/dashboard"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20"><Gamepad2 size={18} /></div><div className={compact ? 'block' : 'block'}><p className="font-display text-base font-semibold tracking-tight">Cursed Realm</p><p className="section-label !text-[9px]">JJK RPG command center</p></div></div></Link>; }
+function Avatar({ player }: { player: { avatar_url?: string | null; display_name?: string | null } }) { return <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-primary/30 bg-primary/10 text-sm font-semibold text-primary">{player.avatar_url ? <img src={player.avatar_url} alt="" className="h-full w-full object-cover" /> : player.display_name?.charAt(0).toUpperCase() || <Crown size={16} />}</div>; }
