@@ -1446,6 +1446,17 @@ class Database:
                 (battle_id,)
             )
 
+    def clear_all_active_pvp_battles(self) -> int:
+        """Finish every active PvP battle. Intended for the owner emergency command."""
+        with self._conn() as conn:
+            row = conn.execute(
+                """UPDATE pvp_battles
+                   SET status='finished', p1_move=NULL, p2_move=NULL
+                   WHERE status='active'
+                   RETURNING battle_id"""
+            ).fetchall()
+            return len(row)
+
     def clear_player_battles(self, user_id: int) -> int:
         """
         Mark ALL active PvP battles involving this player as finished and clear

@@ -2,6 +2,19 @@ import random
 import time
 
 
+GEAR_PRICES = {
+    "playful cloud": 50000,
+    "split soul katana": 75000,
+    "inverted spear of heaven": 100000,
+    "dragon bone": 65000,
+    "chain of a thousand miles": 55000,
+    "black rope": 90000,
+    "tokyo jujutsu robes": 25000,
+    "simple domain vestments": 45000,
+    "disaster curse mantle": 70000,
+    "heavenly body wraps": 60000,
+}
+
 class ExpansionSystem:
     """
     ExpansionSystem — in-memory world/progression/gear/technique/clan/market/raid system.
@@ -245,8 +258,21 @@ class ExpansionSystem:
 
     def acquire_gear(self, user_id, name):
         p = self._ensure(user_id)
-        p.setdefault("gear", []).append({"gear_name": name, "level": 1, "equipped": False})
-        return True, f"Acquired gear: {name}"
+        normalized_name = name.strip().lower()
+        price = GEAR_PRICES.get(normalized_name)
+        if price is None:
+            return False, "That gear is not in the catalog. Use `/gear` to see purchasable gear."
+        if self.db:
+            player = self.db.get_player(user_id)
+            if not player:
+                return False, "Use /start first."
+            if int(player.get("yen", 0)) < price:
+                return False, f"Not enough yen. This gear costs ¥{price:,}; you have ¥{int(player.get('yen', 0)):,}."
+            self.db.deduct_yen(user_id, price)
+        if any(g.get("gear_name", "").lower() == name.lower() for g in p.setdefault("gear", [])):
+            return False, "You already own that gear."
+        p["gear"].append({"gear_name": name, "level": 1, "equipped": False, "purchase_price": price})
+        return True, f"Purchased gear: {name} for ¥{price:,}"
 
     def equip_gear(self, user_id, name):
         p = self._ensure(user_id)

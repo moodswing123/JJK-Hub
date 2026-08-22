@@ -40,13 +40,12 @@ class GameEngine:
         # HP is intentionally high — guarantees 3+ rounds even with strong attacks.
         # Rule of thumb: spirit HP >= 4 × max player single-hit damage at this level.
         base_stats = {
-            'Grade 4':       {'hp': 240,  'atk': 12, 'def': 8,  'reward': 500,   'xp': 50},
-            'Grade 3':       {'hp': 400,  'atk': 25, 'def': 15, 'reward': 1000,  'xp': 100},
-            'Grade 2':       {'hp': 700,  'atk': 45, 'def': 28, 'reward': 2500,  'xp': 250},
-            'Grade 1':       {'hp': 1100, 'atk': 70, 'def': 50, 'reward': 5000,  'xp': 500},
-            'Special Grade': {'hp': 1800, 'atk': 100,'def': 75, 'reward': 10000, 'xp': 1000}
+            'Grade 4':       {'hp': 240,  'atk': 12, 'def': 8, 'reward': 1000,  'xp': 50},
+            'Grade 3':       {'hp': 400,  'atk': 25, 'def': 15, 'reward': 2000,  'xp': 100},
+            'Grade 2':       {'hp': 700,  'atk': 45, 'def': 28, 'reward': 5000,  'xp': 250},
+            'Grade 1':       {'hp': 1100, 'atk': 70, 'def': 50, 'reward': 10000, 'xp': 500},
+            'Special Grade': {'hp': 1800, 'atk': 100, 'def': 75, 'reward': 20000, 'xp': 1000}
         }
-
         stats = base_stats[grade]
         scale = 1 + (player_level * 0.07)
 

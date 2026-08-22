@@ -321,13 +321,21 @@ async def gear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         owned = expansion.gear(user_id)
         await _expansion_reply(
             update,
-            "🗡️ **Cursed Gear**\n" + "\n".join(f"• {name} — {desc}" for name, desc in catalog) +
+            "🗡️ **Cursed Gear Catalog**\n" + "\n".join(
+                f"#{index} • {name} — {desc} | ¥{expansion.GEAR_PRICES.get(name.lower(), 0):,}"
+                for index, (name, desc) in enumerate(catalog, start=1)
+            ) +
             "\n\nOwned:\n" + ("\n".join(f"• {g['gear_name']} Lv.{g['level']} {'[equipped]' if g['equipped'] else ''}" for g in owned) or "None") +
-            "\nAcquire with `/gear acquire <name>`; equip with `/gear equip <name>`."
+            "\nBuy with `/gear acquire <name>`; equip with `/gear equip <name>` or `/equip <inventory number>`."
         )
         return
     action = context.args[0].lower()
     name = " ".join(context.args[1:])
+    catalog = WEAPON_DISPLAY + ARMOR_DISPLAY
+    if action in ("acquire", "equip", "upgrade") and name.isdigit():
+        gear_index = int(name) - 1
+        if 0 <= gear_index < len(catalog):
+            name = catalog[gear_index][0]
     if action == "acquire":
         ok, text = expansion.acquire_gear(user_id, name)
     elif action == "equip":
@@ -1206,7 +1214,7 @@ async def _handle_bot_battle_move(update, context, player, battle, move_input: s
         pass
 
     if battle['bot_hp'] <= 0:
-        reward = max(1000, int(2000 * (player['level'] / 10)))
+        reward = max(2000, int(4000 * (player['level'] / 10)))
         xp_gain = int(reward * 0.5)
         db.add_yen(user.id, reward)
         db.add_xp(user.id, xp_gain)
@@ -1641,6 +1649,40 @@ async def pvp_bot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # SHOP / ECONOMY
 # ═══════════════════════════════════════════════════════════════
 
+async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Buy a shop item by its stable one-based number or exact name."""
+    user = update.effective_user
+    items = db.get_shop_items()
+    if not context.args:
+        await update.effective_message.reply_text("Usage: /buy <item number or exact item name>")
+        return
+    raw = " ".join(context.args).strip()
+    item = None
+    if raw.isdigit():
+        index = int(raw) - 1
+        if 0 <= index < len(items):
+            item = items[index]
+    else:
+        item = next((candidate for candidate in items if candidate["name"].lower() == raw.lower()), None)
+    if not item:
+        await update.effective_message.reply_text("❌ Shop item not found. Use /shop to see numbered items.")
+        return
+    result = db.purchase_shop_item(user.id, item["id"])
+    if not result.get("ok"):
+        reason = result.get("reason")
+        if reason == "funds":
+            await update.effective_message.reply_text(f"❌ Not enough yen. Need ¥{format_yen(result['price'])}; you have ¥{format_yen(result.get('balance', 0))}.")
+        elif reason == "removed":
+            await update.effective_message.reply_text("❌ That item is no longer available.")
+        else:
+            await update.effective_message.reply_text("❌ Purchase failed. Try again.")
+        return
+    await update.effective_message.reply_text(
+        f"✅ Purchased **{item['name']}** for ¥{format_yen(item['price'])}.\n"
+        f"💰 Remaining balance: ¥{format_yen(result['remaining'])}",
+        parse_mode='Markdown'
+    )
+
 async def shop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show shop with pagination."""
     page = int(context.args[0]) - 1 if context.args and context.args[0].isdigit() else 0
@@ -1652,10 +1694,10 @@ async def shop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     lines = []
-    for item in items:
+    for item_number, item in enumerate(items, start=1):
         icon = type_icons.get(item['type'], '📦')
         lines.append(
-            f"{icon} **{item['name']}**\n"
+            f"#{item_number} {icon} **{item['name']}**\n"
             f"   📖 {item['description']}\n"
             f"   💰 ¥{format_yen(item['price'])} | Type: {item['type']}\n"
             f"   💡 _{item.get('use_description', 'Check /help for usage')}_"
@@ -1672,7 +1714,7 @@ async def shop_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"\n\n📄 Page {page+1}/{total_pages} — Use /shop [page number]"
 
     buy_btns = [[InlineKeyboardButton(
-        f"Buy {i['name'][:20]} - ¥{format_yen(i['price'])}",
+        f"Buy #{items.index(i) + 1} {i['name'][:16]} - ¥{format_yen(i['price'])}",
         callback_data=f"buy_{i['id']}"
     )] for i in page_items]
 
@@ -1900,6 +1942,10 @@ async def equip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     items = db.get_inventory(user.id)
+    if item_name.isdigit():
+        item_index = int(item_name) - 1
+        if 0 <= item_index < len(items):
+            item_name = items[item_index]['name']
     item = next((i for i in items if i['name'].lower() == item_name.lower()), None)
     if not item:
         await update.effective_message.reply_text(f"❌ Item '{item_name}' not found in inventory!")
@@ -2521,6 +2567,7 @@ HELP_PAGES = [
         "**👑 Owner (dot-prefix)**\n"
         "`.addyen @user <amount>` — Add yen\n"
         "`.removeyen @user <amount>` — Remove yen\n"
+        "`/adminendbattle` — End all active PvP battles (admin)\n"
         "`.setrank @user <rank>` — Set rank\n"
         "`.removerank @user` — Reduce rank\n"
         "`.addlevel @user <amount>` — Add levels\n"
@@ -2554,6 +2601,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ═══════════════════════════════════════════════════════════════
 # ADMIN COMMANDS
 # ═══════════════════════════════════════════════════════════════
+
+async def adminendbattle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Owner/admin emergency command to finish every active PvP battle."""
+    user = update.effective_user
+    if not is_admin(user.id):
+        await update.effective_message.reply_text("⛔ Admin access required.")
+        return
+    try:
+        count = db.clear_all_active_pvp_battles()
+        await update.effective_message.reply_text(f"✅ Ended {count} active battle(s). Pending moves and battle locks were cleared.")
+    except Exception as exc:
+        logger.exception("adminendbattle failed")
+        await update.effective_message.reply_text("❌ Could not end active battles. Check /debug for database status.")
 
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -3415,6 +3475,7 @@ def main():
 
     # Shop & Economy
     application.add_handler(CommandHandler("shop", shop_command))
+    application.add_handler(CommandHandler("buy", buy_command))
     application.add_handler(CommandHandler("missions", missions_command))
     application.add_handler(CommandHandler(["leaderboard", "lb"], leaderboard_command))
     application.add_handler(CommandHandler("listplayers", listplayers_command))
@@ -3469,6 +3530,7 @@ def main():
     application.add_handler(CommandHandler("endgame", endgame_command))
 
     # Admin
+    application.add_handler(CommandHandler("adminendbattle", adminendbattle_command))
     application.add_handler(CommandHandler("admin", admin_command))
 
     # Debug — owner-only full diagnostic
