@@ -1,5 +1,6 @@
 import os
 import gemini_debugger
+from gemini_debugger import format_review_lines
 
 class TimeoutResponse:
     def raise_for_status(self):
@@ -12,6 +13,7 @@ os.environ['GEMINI_API_KEY'] = 'test-only'
 original_post = gemini_debugger.requests.post
 gemini_debugger.requests.post = fail_post
 assert gemini_debugger.analyze_diagnostic('deterministic diagnostics') is None
+assert format_review_lines(None) == ['Gemini AI review unavailable; deterministic diagnostics were retained.']
 
 def long_post(*args, **kwargs):
     class Response:
@@ -24,6 +26,9 @@ def long_post(*args, **kwargs):
 gemini_debugger.requests.post = long_post
 result = gemini_debugger.analyze_diagnostic('safe report')
 assert result is not None and len(result) == 3500
+formatted = format_review_lines(result)
+assert len(formatted) == 1 and formatted[0].startswith('🤖 ')
+assert len(formatted[0]) <= 3502
 assert gemini_debugger._redact({'password': 'secret'})['password'] == '[REDACTED]'
 gemini_debugger.requests.post = original_post
 print('Gemini fallback and truncation behavior passed')

@@ -16,6 +16,14 @@ def _redact(value: Any) -> Any:
     text = str(value)
     return "[REDACTED]" if _SENSITIVE.search(text) else text
 
+def format_review_lines(ai_review: str | None) -> list[str]:
+    """Format the optional AI review for the final Telegram diagnostic response."""
+    if not ai_review:
+        return ["Gemini AI review unavailable; deterministic diagnostics were retained."]
+    lines = [line.strip() for line in ai_review[:3500].splitlines() if line.strip()]
+    return [f"🤖 {line}" for line in lines[:8]]
+
+
 def analyze_diagnostic(report: str) -> str | None:
     key = os.getenv("GEMINI_API_KEY")
     if not key:
