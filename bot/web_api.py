@@ -164,6 +164,30 @@ def equip_inventory_item(user_id):
     return jsonify({"success": True, "item": item})
 
 
+@app.route("/api/market", methods=["GET"])
+@require_user
+def market_snapshot(user_id):
+    return jsonify(get_db().get_market_snapshot(user_id))
+
+
+@app.route("/api/market/trade", methods=["POST"])
+@require_user
+def market_trade(user_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        asset_id = str(data.get("asset_id", "")).strip().lower()
+        side = str(data.get("side", "")).strip().lower()
+        quantity = int(data.get("quantity", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid asset, side, and quantity are required"}), 400
+    result = get_db().execute_market_trade(user_id, asset_id, side, quantity)
+    if result.get("ok"):
+        return jsonify(result)
+    status = 400 if result.get("reason") in {"invalid", "funds", "holdings"} else 404
+    messages = {"invalid": "Invalid market order", "funds": "Insufficient yen", "holdings": "Insufficient holdings", "not_found": "Market asset or player not found"}
+    return jsonify({"error": messages.get(result.get("reason"), "Market order failed"), **result}), status
+
+
 @app.route("/api/dashboard/summary", methods=["GET"])
 
 @require_user

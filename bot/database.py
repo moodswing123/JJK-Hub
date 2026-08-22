@@ -192,6 +192,47 @@ class Database:
                     created_at  TEXT
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS market_assets (
+                    asset_id TEXT PRIMARY KEY,
+                    ticker TEXT NOT NULL UNIQUE,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    price INTEGER NOT NULL CHECK (price > 0),
+                    change_percent DOUBLE PRECISION NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS market_holdings (
+                    user_id BIGINT NOT NULL REFERENCES players(user_id) ON DELETE CASCADE,
+                    asset_id TEXT NOT NULL REFERENCES market_assets(asset_id) ON DELETE CASCADE,
+                    quantity INTEGER NOT NULL DEFAULT 0 CHECK (quantity >= 0),
+                    average_price INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, asset_id)
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS market_trades (
+                    trade_id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES players(user_id) ON DELETE CASCADE,
+                    asset_id TEXT NOT NULL REFERENCES market_assets(asset_id),
+                    side TEXT NOT NULL CHECK (side IN ('buy', 'sell')),
+                    quantity INTEGER NOT NULL CHECK (quantity > 0),
+                    price INTEGER NOT NULL CHECK (price > 0),
+                    total INTEGER NOT NULL CHECK (total > 0),
+                    created_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                INSERT INTO market_assets (asset_id, ticker, name, description, price, change_percent, updated_at)
+                VALUES
+                  ('sukuna', 'SUKUNA', 'King of Curses', 'High-volatility cursed energy index.', 2400, 12.8, NOW()::text),
+                  ('sixeyes', 'SIXEYES', 'Six Eyes Index', 'Precision and perception sector.', 1820, 6.4, NOW()::text),
+                  ('mahito', 'MAHITO', 'Soul Mutation', 'Speculative soul-tech asset.', 760, -3.1, NOW()::text)
+                ON CONFLICT (asset_id) DO NOTHING
+            """)
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_pvp_chat_status ON pvp_battles(chat_id, status)"
             )
@@ -754,6 +795,53 @@ class Database:
                    FROM players ORDER BY last_active_at DESC NULLS LAST, display_name"""
             ).fetchall()
             return [dict(row) for row in rows]
+
+    def get_market_snapshot(self, user_id: int) -> Dict:
+        with self._conn() as conn:
+            assets = conn.execute("SELECT * FROM market_assets ORDER BY asset_id").fetchall()
+            holdings = conn.execute("""
+                SELECT h.asset_id, h.quantity, h.average_price
+                FROM market_holdings h WHERE h.user_id=%s AND h.quantity > 0
+            """, (user_id,)).fetchall()
+            player = conn.execute("SELECT yen FROM players WHERE user_id=%s", (user_id,)).fetchone()
+            trades = conn.execute("""
+                SELECT t.trade_id, a.ticker, t.side, t.quantity, t.price, t.total, t.created_at
+                FROM market_trades t JOIN market_assets a ON a.asset_id=t.asset_id
+                WHERE t.user_id=%s ORDER BY t.trade_id DESC LIMIT 12
+            """, (user_id,)).fetchall()
+            return {'yen': int((player or {}).get('yen', 0)), 'assets': [dict(a) for a in assets], 'holdings': [dict(h) for h in holdings], 'trades': [dict(t) for t in trades]}
+
+    def execute_market_trade(self, user_id: int, asset_id: str, side: str, quantity: int) -> Dict:
+        if side not in ('buy', 'sell') or quantity < 1 or quantity > 100000:
+            return {'ok': False, 'reason': 'invalid'}
+        now = datetime.utcnow().isoformat()
+        with self._conn() as conn:
+            player = conn.execute("SELECT yen FROM players WHERE user_id=%s FOR UPDATE", (user_id,)).fetchone()
+            asset = conn.execute("SELECT * FROM market_assets WHERE asset_id=%s FOR UPDATE", (asset_id,)).fetchone()
+            if not player or not asset:
+                return {'ok': False, 'reason': 'not_found'}
+            price, total = int(asset['price']), int(asset['price']) * quantity
+            holding = conn.execute("SELECT * FROM market_holdings WHERE user_id=%s AND asset_id=%s FOR UPDATE", (user_id, asset_id)).fetchone()
+            owned = int((holding or {}).get('quantity', 0))
+            if side == 'buy':
+                if int(player['yen']) < total:
+                    return {'ok': False, 'reason': 'funds', 'balance': int(player['yen']), 'total': total}
+                new_qty = owned + quantity
+                avg = round(((owned * int((holding or {}).get('average_price', price))) + total) / new_qty)
+                conn.execute("UPDATE players SET yen=yen-%s WHERE user_id=%s", (total, user_id))
+            else:
+                if owned < quantity:
+                    return {'ok': False, 'reason': 'holdings', 'owned': owned}
+                new_qty, avg = owned - quantity, int(holding['average_price'])
+                conn.execute("UPDATE players SET yen=yen+%s WHERE user_id=%s", (total, user_id))
+            conn.execute("""
+                INSERT INTO market_holdings (user_id, asset_id, quantity, average_price, updated_at)
+                VALUES (%s,%s,%s,%s,%s)
+                ON CONFLICT (user_id, asset_id) DO UPDATE SET quantity=EXCLUDED.quantity, average_price=EXCLUDED.average_price, updated_at=EXCLUDED.updated_at
+            """, (user_id, asset_id, new_qty, avg, now))
+            conn.execute("INSERT INTO market_trades (user_id,asset_id,side,quantity,price,total,created_at) VALUES (%s,%s,%s,%s,%s,%s,%s)", (user_id, asset_id, side, quantity, price, total, now))
+            balance = conn.execute("SELECT yen FROM players WHERE user_id=%s", (user_id,)).fetchone()['yen']
+            return {'ok': True, 'side': side, 'asset_id': asset_id, 'quantity': quantity, 'price': price, 'total': total, 'balance': int(balance), 'holding_quantity': new_qty}
 
     def add_yen(self, user_id: int, amount: int) -> int:
         with self._conn() as conn:
