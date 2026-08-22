@@ -23,6 +23,8 @@ from image_generator import ImageGenerator
 from utils import is_owner, is_admin, format_yen
 from expansion_system import ExpansionSystem
 from web_auth import build_web_conversation, build_web_reset_handler
+from commands.wallet import build_wallet_command
+from commands.battle import build_battle_commands
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -34,6 +36,7 @@ db = Database()
 game = GameEngine(db)
 image_gen = ImageGenerator()
 expansion = ExpansionSystem(db)
+battle_command, flee_command = build_battle_commands(db, game, format_yen)
 
 # ═══════════════════════════════════════════════════════════════
 # HELPERS
@@ -837,31 +840,6 @@ async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text(profile_text, parse_mode='Markdown')
 
 
-async def wallet_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show the player's yen balance."""
-    user = update.effective_user
-    player = db.get_player(user.id)
-    if not player:
-        await update.effective_message.reply_text("❌ Use /start first!")
-        return
-    wallet_text = (
-        f"💴 **{player['display_name']}'s Wallet**\n"
-        f"{'━' * 22}\n"
-        f"💰 Balance: ¥{format_yen(player['yen'])}\n"
-        f"⭐ Level: {player['level']} | 🏅 Rank: {player['rank']}\n"
-        f"{'━' * 22}\n"
-        f"💸 Use /shop to spend • /daily for free yen",
-    )
-    try:
-        await update.effective_message.reply_photo(
-            photo=image_gen.generate_wallet_image(player),
-            caption=wallet_text, parse_mode='Markdown'
-        )
-    except Exception as exc:
-        logger.error("Wallet image failed: %s", exc)
-        await update.effective_message.reply_text(wallet_text, parse_mode='Markdown')
-
-
 # ═══════════════════════════════════════════════════════════════
 # CHARACTERS — PAGINATED
 # ═══════════════════════════════════════════════════════════════
@@ -967,101 +945,10 @@ async def characters_page_callback(update: Update, context: ContextTypes.DEFAULT
 
 
 # ═══════════════════════════════════════════════════════════════
-# PVE BATTLE
+# PVE BATTLE COMMANDS
 # ═══════════════════════════════════════════════════════════════
-
-async def battle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    player = db.get_player(user.id)
-
-    if not player or not player['character_id']:
-        await update.effective_message.reply_text("❌ Choose a character first! Use /characters")
-        return
-
-    if context.user_data.get('pve_battle'):
-        await update.effective_message.reply_text("❌ You're already in a PvE battle! Use /flee to escape.")
-        return
-    if context.user_data.get('bot_battle'):
-        await update.effective_message.reply_text("❌ You're already in a bot battle! Use /flee to escape.")
-        return
-
-    spirit = game.generate_cursed_spirit(player['level'])
-    context.user_data['pve_battle'] = {
-        'spirit': spirit,
-        'turn': 1,
-        'player_hp': player['hp'],
-        'spirit_hp': spirit['hp'],
-    }
-
-    char = db.get_character(player['character_id'])
-    attacks = char.get('attacks', []) if char else []
-    atk_hint = "\n".join(f"  /a {a['num']} — {a['name']}" for a in attacks)
-
-    text = (
-        f"👹 **CURSED SPIRIT APPEARS!**\n\n"
-        f"*{spirit['name']}* (Grade {spirit['grade']})\n"
-        f"❤️ HP: {spirit['hp']}\n"
-        f"⚔️ ATK: {spirit['attack']}\n"
-        f"🛡️ DEF: {spirit['defense']}\n\n"
-        f"💰 *Reward:* ¥{format_yen(spirit['reward'])}\n"
-        f"⭐ *XP:* {spirit['xp']}\n\n"
-        f"{'━' * 22}\n"
-        f"**Your Attacks:**\n"
-        f"  /a attack — Basic strike (free)\n"
-        f"{atk_hint}\n\n"
-        f"📋 /a — See all moves | 💨 /flee — Escape"
-    )
-    await update.effective_message.reply_text(text, parse_mode='Markdown')
-
-
-async def flee_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    /flee — escape from any active battle (PvE, Bot, or PvP).
-
-    ROOT CAUSE FIX for Battle Lock Bug:
-    The original flee_command only cleared in-memory pve_battle / bot_battle
-    keys from context.user_data.  It never touched the PostgreSQL pvp_battles
-    table.  When a player used Domain Expansion in a PvP match and then fled,
-    the battle row stayed 'active' with p1_move / p2_move already set.  The
-    next /a command found that stale active battle and showed "You've already
-    locked in Domain Expansion: Malevolent Shrine. Waiting for your opponent..."
-    forever — even across entirely new matches.
-
-    Fix: call db.clear_player_battles() on every /flee so all active PvP rows
-    for this player are finished and their pending moves are nulled out.
-    """
-    user = update.effective_user
-    chat = update.effective_chat
-    popped = False
-
-    # 1. Clear in-memory PvE / Bot battles
-    for key in ('pve_battle', 'bot_battle'):
-        if context.user_data.pop(key, None):
-            popped = True
-
-    # 2. Clear any active PvP battle for this player in the current chat
-    if chat:
-        pvp = db.get_active_pvp_battle(user.id, chat.id)
-        if pvp:
-            db.finish_pvp_battle(pvp['battle_id'])
-            popped = True
-
-    # 3. Also sweep ALL active PvP battles for this player across every chat.
-    #    This catches battles started in other group chats and ensures the
-    #    Domain Expansion / move lock is completely gone before the next battle.
-    cleared = db.clear_player_battles(user.id)
-    if cleared and not popped:
-        popped = True
-
-    if popped:
-        await update.effective_message.reply_text(
-            "💨 **You fled the battle!**\n\nSometimes retreat is the best strategy...\n"
-            "_All battle state has been fully reset._",
-            parse_mode='Markdown'
-        )
-    else:
-        await update.effective_message.reply_text("❌ You're not in a battle!")
-
+# `/battle` and `/flee` live in commands/battle.py. `/a` remains here for now
+# because it also resolves legacy techniques, expansions, and PvP state.
 
 # ═══════════════════════════════════════════════════════════════
 # /a  ATTACK COMMAND  (PvE + Bot + PvP)
@@ -3535,7 +3422,7 @@ def main():
     application.add_handler(CommandHandler("daily", daily_command))
     application.add_handler(CommandHandler("heal", heal_command))
     application.add_handler(CommandHandler("energy", energy_command))
-    application.add_handler(CommandHandler("wallet", wallet_command))
+    application.add_handler(CommandHandler("wallet", build_wallet_command(db, image_gen, format_yen)))
     application.add_handler(CommandHandler("giveyen", giveyen_command))
     application.add_handler(CommandHandler("buyyen", buyyen_command))
     application.add_handler(CommandHandler("rank", rank_command))

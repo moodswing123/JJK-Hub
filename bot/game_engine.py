@@ -67,26 +67,26 @@ class GameEngine:
     def calculate_damage(self, attacker_atk: int, defender_def: int,
                          target_max_hp: int = None) -> int:
         """
-        Calculate damage with randomness, crit chance, and a per-round cap.
-        Cap: a single hit cannot deal more than 30 % of the target's max HP,
-        which guarantees battles last at minimum 4 rounds (ceil(1/0.30) = 4).
-        With crits and high multipliers the battle still ends in 3–6 rounds,
-        creating exciting fights rather than instant kills.
+        Resolve damage symmetrically for PvE and PvP.
+
+        Attackers and defenders use the same mitigation model. Variance is
+        deliberately narrow and critical hits are modest, so a fight is not
+        decided by a single lucky roll. The 30% max-HP cap remains in place
+        to prevent instant defeats and preserve meaningful counterplay.
         """
-        base_damage = max(1, attacker_atk - int(defender_def * 0.5))
-        variance    = random.uniform(0.85, 1.15)
-        crit_chance = random.random()
+        attacker_atk = max(1, int(attacker_atk))
+        defender_def = max(0, int(defender_def))
+        # Defense mitigates consistently but cannot reduce a comparable attack
+        # below the guaranteed minimum or erase the effect of equipment.
+        mitigation = min(int(defender_def * 0.60), int(attacker_atk * 0.45))
+        base_damage = max(8, attacker_atk - mitigation)
+        variance = random.uniform(0.92, 1.08)
+        is_critical = random.random() < 0.05
+        dmg = max(1, int(base_damage * variance * (1.5 if is_critical else 1.0)))
 
-        if crit_chance < 0.10:          # 10 % crit → 2× damage
-            dmg = max(1, int(base_damage * variance * 2))
-        else:
-            dmg = max(1, int(base_damage * variance))
-
-        # Enforce round cap to guarantee minimum rounds
         if target_max_hp and target_max_hp > 0:
             cap = max(15, int(target_max_hp * 0.30))
             dmg = min(dmg, cap)
-
         return dmg
 
     def calculate_pvp_damage(self, attacker: Dict, defender: Dict, move: str) -> Dict:
