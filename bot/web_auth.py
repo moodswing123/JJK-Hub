@@ -45,10 +45,15 @@ def generate_reset_code() -> str:
 
 # Public JJK RPG dashboard URL used when DASHBOARD_URL is not supplied by the host.
 _DEFAULT_DASHBOARD_URL = "https://jjk-hub-api-server.vercel.app"
+_RETIRED_DASHBOARD_URL = "https://jjk-hub-api-server-5qop-ten.vercel.app"
 
 
 def _dashboard_url() -> str:
-    return (os.getenv("DASHBOARD_URL") or _DEFAULT_DASHBOARD_URL).strip().rstrip("/")
+    configured = (os.getenv("DASHBOARD_URL") or _DEFAULT_DASHBOARD_URL).strip().rstrip("/")
+    # Prevent an old bot deployment variable from sending players to the crashed alias.
+    if configured == _RETIRED_DASHBOARD_URL:
+        return _DEFAULT_DASHBOARD_URL
+    return configured or _DEFAULT_DASHBOARD_URL
 
 
 def build_web_reset_handler(db):
@@ -128,11 +133,12 @@ def build_web_conversation(db) -> ConversationHandler:
             await message.reply_text("I could not save your dashboard access right now. Please try /web again later.")
             return ConversationHandler.END
         context.user_data.clear()
-        link = _dashboard_url()
-        if link:
-            await message.reply_text(f"✅ Dashboard access created for *{username_value}*.\n\nOpen your dashboard: {link}", parse_mode="Markdown", disable_web_page_preview=True)
-        else:
-            await message.reply_text(f"✅ Dashboard access created for *{username_value}*.\n\nThe dashboard link has not been configured yet. An administrator will publish it soon.", parse_mode="Markdown")
+        # Send the login link immediately after the credentials are persisted.
+        await message.reply_text(
+            f"✅ Dashboard access created for *{username_value}*.\n\nOpen your dashboard now: {_dashboard_url()}",
+            parse_mode="Markdown",
+            disable_web_page_preview=True,
+        )
         return ConversationHandler.END
 
     async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
