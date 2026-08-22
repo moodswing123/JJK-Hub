@@ -24,6 +24,15 @@ def format_review_lines(ai_review: str | None) -> list[str]:
     return [f"🤖 {line}" for line in lines[:8]]
 
 
+def apply_review_to_diagnostic(lines: list[str], ai_review: str | None) -> None:
+    """Append the Gemini section to the live `/debug` response in place."""
+    if ai_review:
+        lines.append("\n━━ GEMINI AI REVIEW ━━")
+        lines.extend(format_review_lines(ai_review))
+    else:
+        lines.append("Gemini AI review unavailable; deterministic diagnostics were retained.")
+
+
 def analyze_diagnostic(report: str) -> str | None:
     key = os.getenv("GEMINI_API_KEY")
     if not key:

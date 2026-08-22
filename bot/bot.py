@@ -3,7 +3,7 @@ Jujutsu Kaisen Telegram Game Bot — Updated
 """
 
 from commands.item_aliases import resolve_numbered_item
-from gemini_debugger import analyze_diagnostic, format_review_lines
+from gemini_debugger import analyze_diagnostic, apply_review_to_diagnostic
 import logging
 import asyncio
 import random
@@ -3157,10 +3157,9 @@ async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         ai_review = analyze_diagnostic("\n".join(lines))
         if ai_review:
-            section("GEMINI AI REVIEW")
-            lines.extend(format_review_lines(ai_review))
+            apply_review_to_diagnostic(lines, ai_review)
         else:
-            info(format_review_lines(None)[0])
+            info(apply_review_to_diagnostic(lines, None) or lines.pop())
     except Exception:
         info("Gemini AI review failed safely; deterministic diagnostics were retained.")
 
