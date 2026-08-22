@@ -41,6 +41,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const jjkApi = {
   telegramLogin: (user: TelegramUser) => request<{ token: string; player: Player }>('/auth/telegram', { method: 'POST', body: JSON.stringify(user) }),
+  passwordLogin: (username: string, password: string) => request<{ token: string; player: Player }>('/auth/password', { method: 'POST', body: JSON.stringify({ username, password }) }),
   me: () => request<Player>('/auth/me'),
   summary: () => request<Summary>('/dashboard/summary'),
   logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
