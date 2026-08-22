@@ -8,7 +8,7 @@ The `client/` directory contains the Vite dashboard. The `bot/` directory contai
 
 ## Deployment boundary
 
-Deploy the repository root to Vercel with `pnpm build` and `dist/public` as the output directory. Vercel serves the frontend only. The current public dashboard URL is `https://jjk-hub-api-server-5qop-ten.vercel.app/`. Run the Python bot and `bot/web_api.py` on a Python-capable host with `BOT_TOKEN`, `OWNER_ID`, `POSTGRES_URL`, `WEB_AUTH_SECRET`, and `DASHBOARD_URL` configured as private environment variables. Set the dashboard’s `VITE_API_BASE_URL` to the separate public API URL ending in `/api`; do not use the dashboard URL as the API base unless the API is deployed on the same host.
+Deploy the repository root to Vercel with `pnpm build` and `dist/public` as the output directory. The current public dashboard and same-origin API URL is `https://jjk-hub-api-server.vercel.app/`. The Vercel project must contain the private `POSTGRES_URL`, `WEB_AUTH_SECRET`, `DASHBOARD_ORIGIN`, and `OWNER_ID` variables. The Telegram bot separately requires `BOT_TOKEN`, `OWNER_ID`, `POSTGRES_URL`, `WEB_AUTH_SECRET`, and `DASHBOARD_URL`; set `DASHBOARD_URL` to the canonical Vercel URL. Because the API is deployed in the same Vercel project, the frontend uses `/api` and does not require a separate `VITE_API_BASE_URL`.
 
 ## Player access flow
 
