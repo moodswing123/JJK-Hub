@@ -13,7 +13,17 @@ from database import Database
 from web_auth import hash_reset_code, verify_password, _hash_password
 
 app = Flask(__name__)
-db = Database()
+_db = None
+
+
+def get_db():
+    """Initialize the database only when an endpoint needs player data."""
+    global _db
+    if _db is None:
+        _db = Database()
+    return _db
+
+
 TOKEN_TTL = 60 * 60 * 24 * 7
 
 
@@ -87,7 +97,7 @@ def password_login():
     username, password = str(data.get("username", "")).strip().lower(), str(data.get("password", ""))
     if not username or not password:
         return jsonify({"error": "Username and password are required"}), 400
-    record = db.get_player_by_dashboard_username(username)
+    record = get_db().get_player_by_dashboard_username(username)
     if not record or not verify_password(password, str(record.get("password_hash", ""))):
         return jsonify({"error": "Invalid username or password"}), 401
     return jsonify({"token": _token(int(record["user_id"])), "player": _player_payload(record)})
@@ -101,17 +111,17 @@ def password_reset():
     new_password = str(data.get("new_password", ""))
     if not username or not code or len(new_password) < 10 or len(new_password) > 128:
         return jsonify({"error": "Username, reset code, and a 10–128 character new password are required"}), 400
-    record = db.get_player_by_dashboard_username(username)
-    if not record or not db.consume_dashboard_reset_token(int(record["user_id"]), hash_reset_code(code)):
+    record = get_db().get_player_by_dashboard_username(username)
+    if not record or not get_db().consume_dashboard_reset_token(int(record["user_id"]), hash_reset_code(code)):
         return jsonify({"error": "The reset code is invalid or expired. Request a new one from Telegram."}), 400
-    db.save_dashboard_credentials(int(record["user_id"]), username, _hash_password(new_password))
+    get_db().save_dashboard_credentials(int(record["user_id"]), username, _hash_password(new_password))
     return jsonify({"success": True})
 
 
 @app.route("/api/auth/me", methods=["GET"])
 @require_user
 def auth_me(user_id):
-    player = _player_payload(db.get_player(user_id))
+    player = _player_payload(get_db().get_player(user_id))
     return jsonify(player) if player else (jsonify({"error": "Player not found"}), 404)
 
 
@@ -119,7 +129,7 @@ def auth_me(user_id):
 @require_user
 def inventory(user_id):
     items = []
-    for item in db.get_inventory(user_id):
+    for item in get_db().get_inventory(user_id):
         payload = dict(item)
         try:
             payload["effect"] = json.loads(payload["effect"]) if payload.get("effect") else {}
@@ -137,8 +147,8 @@ def equip_inventory_item(user_id):
         item_id = int(data.get("item_id"))
     except (TypeError, ValueError):
         return jsonify({"error": "A valid item_id is required"}), 400
-    player = db.get_player(user_id)
-    item = next((candidate for candidate in db.get_inventory(user_id) if int(candidate["id"]) == item_id), None)
+    player = get_db().get_player(user_id)
+    item = next((candidate for candidate in get_db().get_inventory(user_id) if int(candidate["id"]) == item_id), None)
     if not player or not item:
         return jsonify({"error": "Cursed tool not found in your inventory"}), 404
     if item.get("type") != "weapon":
@@ -149,8 +159,8 @@ def equip_inventory_item(user_id):
         effect = {}
     for stat in ("attack", "defense"):
         if effect.get(stat):
-            db.update_player_stat(user_id, stat, int(player[stat]) + int(effect[stat]))
-    db.remove_from_inventory(user_id, item_id)
+            get_db().update_player_stat(user_id, stat, int(player[stat]) + int(effect[stat]))
+    get_db().remove_from_inventory(user_id, item_id)
     return jsonify({"success": True, "item": item})
 
 
@@ -158,7 +168,7 @@ def equip_inventory_item(user_id):
 
 @require_user
 def dashboard_summary(user_id):
-    player = _player_payload(db.get_player(user_id))
+    player = _player_payload(get_db().get_player(user_id))
     if not player:
         return jsonify({"error": "Player not found"}), 404
     return jsonify({"player": player, "online_count": 0, "recent_activity": [], "announcements": [], "daily_status": {"streak": 0, "can_claim": False}})
