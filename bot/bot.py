@@ -2,6 +2,7 @@
 Jujutsu Kaisen Telegram Game Bot — Updated
 """
 
+from commands.item_aliases import resolve_numbered_item
 import logging
 import asyncio
 import random
@@ -1705,13 +1706,7 @@ async def buy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text("Usage: /buy <item number or exact item name>")
         return
     raw = " ".join(context.args).strip()
-    item = None
-    if raw.isdigit():
-        index = int(raw) - 1
-        if 0 <= index < len(items):
-            item = items[index]
-    else:
-        item = next((candidate for candidate in items if candidate["name"].lower() == raw.lower()), None)
+    item = resolve_numbered_item(items, raw)
     if not item:
         await update.effective_message.reply_text("❌ Shop item not found. Use /shop to see numbered items.")
         return
@@ -1990,11 +1985,8 @@ async def equip_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     items = db.get_inventory(user.id)
-    if item_name.isdigit():
-        item_index = int(item_name) - 1
-        if 0 <= item_index < len(items):
-            item_name = items[item_index]['name']
-    item = next((i for i in items if i['name'].lower() == item_name.lower()), None)
+    resolved_item = resolve_numbered_item(items, item_name)
+    item = resolved_item
     if not item:
         await update.effective_message.reply_text(f"❌ Item '{item_name}' not found in inventory!")
         return
