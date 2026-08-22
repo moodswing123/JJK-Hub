@@ -15,4 +15,6 @@ assert 'GEAR_PRICES = {' in EXPANSION
 assert "bot_starts = random.choice([True, False])" in BOT
 assert "'initiative': 'bot' if bot_starts else 'player'" in BOT
 assert "'reward': 20000" in ENGINE
+assert 'challenge_gif = image_gen.generate_battle_gif' in BOT
+assert 'intro_gif = image_gen.generate_battle_gif' in BOT
 print('requested bot-fix assertions passed')

@@ -1571,6 +1571,23 @@ async def ch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_photo(
             photo=battle_image, caption=text, reply_markup=keyboard, parse_mode='Markdown'
         )
+        try:
+            challenge_gif = image_gen.generate_battle_gif(
+                attacker_name=challenger.get('display_name') or 'Challenger',
+                attacker_char=challenger_char,
+                defender_name=opponent.get('display_name') or 'Opponent',
+                defender_char=opponent_char,
+                move_name='Cursed Energy Clash',
+                attacker_hp=challenger['hp'],
+                attacker_max_hp=challenger['max_hp'],
+                defender_hp=opponent['hp'],
+                defender_max_hp=opponent['max_hp'],
+            )
+            if challenge_gif:
+                import io
+                await update.effective_message.reply_animation(animation=io.BytesIO(challenge_gif), filename='pvp_challenge.gif')
+        except Exception:
+            logger.debug('Could not render challenge animation', exc_info=True)
     except Exception as e:
         logger.error(f"Battle image error: {e}")
         await update.effective_message.reply_text(text, reply_markup=keyboard, parse_mode='Markdown')
@@ -1654,6 +1671,23 @@ async def pvp_bot_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         img = image_gen.generate_pvp_battle_display(player, bot_player, player_char, bot_char, turn=1)
         await update.effective_message.reply_photo(photo=img, caption=text, parse_mode='Markdown')
+        try:
+            intro_gif = image_gen.generate_battle_gif(
+                attacker_name=player.get('display_name') or 'You',
+                attacker_char=player_char,
+                defender_name=bot_player.get('display_name') or 'Bot Opponent',
+                defender_char=bot_char,
+                move_name='Cursed Energy Clash',
+                attacker_hp=context.user_data['bot_battle']['player_hp'],
+                attacker_max_hp=player['max_hp'],
+                defender_hp=bot_player['hp'],
+                defender_max_hp=bot_player['max_hp'],
+            )
+            if intro_gif:
+                import io
+                await update.effective_message.reply_animation(animation=io.BytesIO(intro_gif), filename='bot_battle.gif')
+        except Exception:
+            logger.debug('Could not render bot battle animation', exc_info=True)
     except Exception as e:
         logger.error(f"Bot battle image error: {e}")
         await update.effective_message.reply_text(text, parse_mode='Markdown')
