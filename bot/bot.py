@@ -3,6 +3,7 @@ Jujutsu Kaisen Telegram Game Bot — Updated
 """
 
 from commands.item_aliases import resolve_numbered_item
+from gemini_debugger import analyze_diagnostic
 import logging
 import asyncio
 import random
@@ -3149,6 +3150,19 @@ async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 warn("  Check CE regen vs CE cost balance.")
     except Exception as exc:
         err(f"Battle simulation crashed: {exc}")
+
+    # ─────────────────────────────────────────────────────────
+    # GEMINI AI REVIEW (optional; deterministic diagnostics remain authoritative)
+    # ─────────────────────────────────────────────────────────
+    try:
+        ai_review = analyze_diagnostic("\n".join(lines))
+        if ai_review:
+            section("GEMINI AI REVIEW")
+            lines.extend([f"🤖 {line}" for line in ai_review.splitlines() if line.strip()][:8])
+        else:
+            info("Gemini AI review unavailable; deterministic diagnostics were retained.")
+    except Exception:
+        info("Gemini AI review failed safely; deterministic diagnostics were retained.")
 
     # ─────────────────────────────────────────────────────────
     # 6. GAME INTEGRITY CHECKS
