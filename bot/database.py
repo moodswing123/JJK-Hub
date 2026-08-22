@@ -96,6 +96,16 @@ class Database:
                 )
             """)
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS dashboard_reset_tokens (
+                    id            BIGSERIAL PRIMARY KEY,
+                    user_id       BIGINT NOT NULL REFERENCES players(user_id) ON DELETE CASCADE,
+                    token_hash    TEXT NOT NULL,
+                    expires_at    TEXT NOT NULL,
+                    used_at       TEXT,
+                    created_at    TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS characters (
                     id          INTEGER PRIMARY KEY,
                     name        TEXT,
@@ -696,6 +706,27 @@ class Database:
                 (user_id, web_username, password_hash, now, now, web_username, password_hash, now)
             )
             return True
+
+    def create_dashboard_reset_token(self, user_id: int, token_hash: str, expires_at: str) -> bool:
+        now = datetime.utcnow().isoformat()
+        with self._conn() as conn:
+            conn.execute("UPDATE dashboard_reset_tokens SET used_at=%s WHERE user_id=%s AND used_at IS NULL", (now, user_id))
+            conn.execute(
+                "INSERT INTO dashboard_reset_tokens (user_id, token_hash, expires_at, created_at) VALUES (%s, %s, %s, %s)",
+                (user_id, token_hash, expires_at, now),
+            )
+            return True
+
+    def consume_dashboard_reset_token(self, user_id: int, token_hash: str) -> bool:
+        now = datetime.utcnow().isoformat()
+        with self._conn() as conn:
+            row = conn.execute(
+                """UPDATE dashboard_reset_tokens SET used_at=%s
+                   WHERE id=(SELECT id FROM dashboard_reset_tokens WHERE user_id=%s AND token_hash=%s AND used_at IS NULL AND expires_at > %s ORDER BY id DESC LIMIT 1)
+                   RETURNING id""",
+                (now, user_id, token_hash, now),
+            ).fetchone()
+            return bool(row)
 
     def get_all_players(self) -> List[Dict]:
         with self._conn() as conn:

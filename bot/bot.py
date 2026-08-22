@@ -22,7 +22,7 @@ from game_engine import GameEngine
 from image_generator import ImageGenerator
 from utils import is_owner, is_admin, format_yen
 from expansion_system import ExpansionSystem
-from web_auth import build_web_conversation
+from web_auth import build_web_conversation, build_web_reset_handler
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -3502,6 +3502,7 @@ def main():
 
     # ── General commands ──────────────────────────────────────
     application.add_handler(build_web_conversation(db))
+    application.add_handler(build_web_reset_handler(db))
     application.add_handler(CommandHandler("start", start_command))
 
     # Profile aliases: /profile and /p

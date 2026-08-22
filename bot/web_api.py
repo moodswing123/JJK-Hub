@@ -10,7 +10,7 @@ from functools import wraps
 from flask import Flask, jsonify, request
 
 from database import Database
-from web_auth import verify_password
+from web_auth import hash_reset_code, verify_password, _hash_password
 
 app = Flask(__name__)
 db = Database()
@@ -91,6 +91,21 @@ def password_login():
     if not record or not verify_password(password, str(record.get("password_hash", ""))):
         return jsonify({"error": "Invalid username or password"}), 401
     return jsonify({"token": _token(int(record["user_id"])), "player": _player_payload(record)})
+
+
+@app.route("/api/auth/password-reset", methods=["POST"])
+def password_reset():
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username", "")).strip().lower()
+    code = str(data.get("code", "")).strip().upper()
+    new_password = str(data.get("new_password", ""))
+    if not username or not code or len(new_password) < 10 or len(new_password) > 128:
+        return jsonify({"error": "Username, reset code, and a 10–128 character new password are required"}), 400
+    record = db.get_player_by_dashboard_username(username)
+    if not record or not db.consume_dashboard_reset_token(int(record["user_id"]), hash_reset_code(code)):
+        return jsonify({"error": "The reset code is invalid or expired. Request a new one from Telegram."}), 400
+    db.save_dashboard_credentials(int(record["user_id"]), username, _hash_password(new_password))
+    return jsonify({"success": True})
 
 
 @app.route("/api/auth/me", methods=["GET"])

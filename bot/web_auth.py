@@ -4,6 +4,8 @@ import hashlib
 import hmac
 import os
 import re
+import secrets
+from datetime import datetime, timedelta
 from typing import Optional
 
 from telegram import Update
@@ -33,8 +35,34 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
+def hash_reset_code(code: str) -> str:
+    return hashlib.sha256(code.strip().upper().encode("utf-8")).hexdigest()
+
+
+def generate_reset_code() -> str:
+    return secrets.token_urlsafe(6).replace("-", "A").replace("_", "B").upper()[:8]
+
+
 def _dashboard_url() -> str:
     return os.getenv("DASHBOARD_URL", "").strip().rstrip("/")
+
+
+def build_web_reset_handler(db):
+    async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user = update.effective_user
+        credentials = db.get_dashboard_credentials(user.id)
+        if not credentials:
+            await update.effective_message.reply_text("No dashboard account is linked to this Telegram account. Use /web to create one first.")
+            return
+        code = generate_reset_code()
+        expires_at = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
+        db.create_dashboard_reset_token(user.id, hash_reset_code(code), expires_at)
+        await update.effective_message.reply_text(
+            f"🔑 *JJK RPG password reset*\n\nYour one-time reset code is `{code}`. It expires in 15 minutes. Enter it on the dashboard with your username and new password.\n\nIf you did not request this, you can ignore this message.",
+            parse_mode="Markdown",
+        )
+
+    return CommandHandler("webreset", reset)
 
 
 def build_web_conversation(db) -> ConversationHandler:
