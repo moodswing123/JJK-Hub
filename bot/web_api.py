@@ -69,7 +69,15 @@ def _player_payload(player):
         "cursed_energy": int(player.get("cursed_energy", 0) or 0), "max_cursed_energy": int(player.get("max_cursed_energy", 0) or 0),
         "attack": int(player.get("attack", 0) or 0), "defense": int(player.get("defense", 0) or 0), "speed": int(player.get("speed", 0) or 0),
         "wins": wins, "losses": losses, "win_rate": round(wins / total * 100, 1) if total else 0,
+        "is_admin": _is_admin(int(player["user_id"])),
     }
+
+
+def _is_admin(user_id: int) -> bool:
+    owner = os.getenv("OWNER_ID", "0")
+    admins = {int(owner)} if owner.isdigit() and int(owner) > 0 else set()
+    admins.update(int(value.strip()) for value in os.getenv("ADMIN_IDS", "").split(",") if value.strip().isdigit())
+    return user_id in admins
 
 
 def require_user(handler):
@@ -79,6 +87,16 @@ def require_user(handler):
         user_id = _user_id_from_token(header.removeprefix("Bearer ").strip()) if header else None
         if not user_id:
             return jsonify({"error": "Authentication required"}), 401
+        return handler(user_id, *args, **kwargs)
+    return wrapped
+
+
+def require_admin(handler):
+    @wraps(handler)
+    @require_user
+    def wrapped(user_id, *args, **kwargs):
+        if not _is_admin(user_id):
+            return jsonify({"error": "Owner access required"}), 403
         return handler(user_id, *args, **kwargs)
     return wrapped
 
@@ -201,6 +219,18 @@ def arcade_play(user_id):
     return jsonify({"error": messages.get(result.get("reason"), "Arcade run failed"), **result}), status
 
 
+@app.route("/api/arcade/skill", methods=["POST"])
+@require_user
+def arcade_skill(user_id):
+    data = request.get_json(silent=True) or {}
+    result = get_db().play_skill_game(user_id, str(data.get("game_id", "")).strip().lower(), data.get("action") or {})
+    if result.get("ok"):
+        return jsonify(result)
+    status = 429 if result.get("reason") == "cooldown" else 400
+    messages = {"invalid": "Unknown game", "invalid_action": "That play did not include valid controls", "cooldown": "The arena is cooling down"}
+    return jsonify({"error": messages.get(result.get("reason"), "Game could not be settled"), **result}), status
+
+
 @app.route("/api/topups/info", methods=["GET"])
 @require_user
 def topup_info(_user_id):
@@ -240,6 +270,31 @@ def create_topup(user_id):
         except requests.RequestException:
             forwarded = False
     return jsonify({"success": True, "topup_id": result["topup_id"], "forwarded_to_owner": forwarded, "message": "Receipt received. Yen will be credited after manual verification."})
+
+
+@app.route("/api/admin/overview", methods=["GET"])
+@require_admin
+def admin_overview(_user_id):
+    return jsonify(get_db().get_admin_overview())
+
+
+@app.route("/api/admin/topups/<int:topup_id>", methods=["POST"])
+@require_admin
+def admin_review_topup(_user_id, topup_id):
+    status = str((request.get_json(silent=True) or {}).get("status", "")).strip().lower()
+    result = get_db().review_topup(topup_id, status)
+    return jsonify(result), (200 if result.get("ok") else 400)
+
+
+@app.route("/api/admin/players/<int:target_id>/yen", methods=["POST"])
+@require_admin
+def admin_adjust_player_yen(_user_id, target_id):
+    try:
+        amount = int((request.get_json(silent=True) or {}).get("amount", 0))
+    except (TypeError, ValueError):
+        amount = 0
+    result = get_db().admin_adjust_yen(target_id, amount)
+    return jsonify(result), (200 if result.get("ok") else 400)
 
 
 @app.route("/api/dashboard/summary", methods=["GET"])

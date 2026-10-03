@@ -37,6 +37,8 @@ export type MarketHolding = { asset_id: string; quantity: number; average_price:
 export type MarketTrade = { trade_id: number; ticker: string; side: 'buy' | 'sell'; quantity: number; price: number; total: number; created_at: string };
 export type MarketSnapshot = { yen: number; assets: MarketAsset[]; holdings: MarketHolding[]; trades: MarketTrade[] };
 export type TopupInfo = { provider: string; account_name: string; account_number: string; notice: string };
+export type SkillGameResult = { ok: boolean; game_id: string; title: string; success: boolean; reward: number; balance: number; distance?: number; prompt?: string };
+export type AdminOverview = { players: { user_id: number; username: string | null; display_name: string; level: number; rank: string; yen: number; wins: number; losses: number; last_active_at: string | null }[]; topups: { topup_id: number; user_id: number; display_name: string | null; amount: number; reference: string; status: string; created_at: string }[]; economy: { total_yen: number; player_count: number; runs_24h: number; paid_24h: number } };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem('jjk_token');
@@ -67,4 +69,8 @@ export const jjkApi = {
     if (!response.ok) throw new Error(payload?.error || 'Receipt submission failed');
     return payload as { success: boolean; topup_id: number; forwarded_to_owner: boolean; message: string };
   },
+  skillGame: (gameId: string, action: Record<string, number>) => request<SkillGameResult>('/arcade/skill', { method: 'POST', body: JSON.stringify({ game_id: gameId, action }) }),
+  adminOverview: () => request<AdminOverview>('/admin/overview'),
+  reviewTopup: (topupId: number, status: 'approved' | 'rejected') => request<{ ok: boolean; status: string }>(`/admin/topups/${topupId}`, { method: 'POST', body: JSON.stringify({ status }) }),
+  adjustYen: (userId: number, amount: number) => request<{ ok: boolean; balance: number }>(`/admin/players/${userId}/yen`, { method: 'POST', body: JSON.stringify({ amount }) }),
 };

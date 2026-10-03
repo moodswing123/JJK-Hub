@@ -1,1 +1,1 @@
-{"routes":[{"path":"/","title":"JJK RPG Player Command Center"}]}
+{"routes":[{"path":"/","title":"JJK RPG Overview"},{"path":"/arcade","title":"JJK RPG Arcade"},{"path":"/market","title":"JJK RPG Market"},{"path":"/treasury","title":"JJK RPG Treasury"},{"path":"/inventory","title":"JJK RPG Inventory"},{"path":"/admin","title":"JJK RPG Admin Console"}]}
