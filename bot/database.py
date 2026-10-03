@@ -256,9 +256,13 @@ class Database:
                     amount INTEGER NOT NULL CHECK (amount > 0),
                     reference TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending',
+                    delivery_status TEXT NOT NULL DEFAULT 'pending',
+                    delivery_error TEXT,
                     created_at TEXT NOT NULL
                 )
             """)
+            conn.execute("ALTER TABLE yen_topups ADD COLUMN IF NOT EXISTS delivery_status TEXT NOT NULL DEFAULT 'pending'")
+            conn.execute("ALTER TABLE yen_topups ADD COLUMN IF NOT EXISTS delivery_error TEXT")
             conn.execute("""
                 INSERT INTO market_assets (asset_id, ticker, name, description, price, change_percent, updated_at, asset_type, sector, volatility, previous_price, day_high, day_low, volume_24h)
                 VALUES
@@ -957,6 +961,27 @@ class Database:
                 VALUES (%s,%s,%s,'pending',%s) RETURNING topup_id, created_at""", (user_id, amount, reference.strip()[:120], now)).fetchone()
             return {'ok': True, 'topup_id': int(row['topup_id']), 'created_at': row['created_at']}
 
+    def update_topup_delivery(self, topup_id: int, status: str, error: str = '') -> bool:
+        if status not in ('sent', 'failed'):
+            return False
+        with self._conn() as conn:
+            row = conn.execute("UPDATE yen_topups SET delivery_status=%s, delivery_error=%s WHERE topup_id=%s RETURNING topup_id", (status, error[:500] if error else None, topup_id)).fetchone()
+            return bool(row)
+
+    def get_admin_prices(self) -> Dict:
+        with self._conn() as conn:
+            shop = conn.execute("SELECT id, name, description, price, type FROM shop_items ORDER BY type, name").fetchall()
+            characters = conn.execute("SELECT id, name, grade, cost AS price FROM characters WHERE cost > 0 ORDER BY cost, name").fetchall()
+            return {'shop_items': [dict(row) for row in shop], 'characters': [dict(row) for row in characters]}
+
+    def update_admin_price(self, source: str, item_id: int, price: int) -> Dict:
+        if source not in ('shop_item', 'character') or price < 1 or price > 1000000000:
+            return {'ok': False, 'reason': 'invalid'}
+        table, column = ('shop_items', 'price') if source == 'shop_item' else ('characters', 'cost')
+        with self._conn() as conn:
+            row = conn.execute(f"UPDATE {table} SET {column}=%s WHERE id=%s RETURNING id, name, {column} AS price", (price, item_id)).fetchone()
+            return {'ok': bool(row), 'item': dict(row) if row else None}
+
     def play_skill_game(self, user_id: int, game_id: str, action: Dict[str, Any]) -> Dict:
         games = {'football': ('Football Penalty', 'Pick a corner and power. Beat the keeper.', 220, 0.42), 'basketball': ('Basketball Three-Point', 'Set arc and power. Find the clean release.', 180, 0.36), 'pool': ('Pool Break', 'Choose an angle and power for the break.', 260, 0.32)}
         if game_id not in games:
@@ -995,7 +1020,7 @@ class Database:
     def get_admin_overview(self) -> Dict:
         with self._conn() as conn:
             players = conn.execute("SELECT user_id, username, display_name, level, rank, yen, wins, losses, last_active_at FROM players ORDER BY last_active_at DESC NULLS LAST LIMIT 100").fetchall()
-            topups = conn.execute("SELECT t.topup_id, t.user_id, p.display_name, t.amount, t.reference, t.status, t.created_at FROM yen_topups t LEFT JOIN players p ON p.user_id=t.user_id ORDER BY t.topup_id DESC LIMIT 50").fetchall()
+            topups = conn.execute("SELECT t.topup_id, t.user_id, p.display_name, t.amount, t.reference, t.status, t.delivery_status, t.delivery_error, t.created_at FROM yen_topups t LEFT JOIN players p ON p.user_id=t.user_id ORDER BY t.topup_id DESC LIMIT 50").fetchall()
             economy = conn.execute("SELECT COALESCE(SUM(yen),0) AS total_yen, COUNT(*) AS player_count FROM players").fetchone()
             runs = conn.execute("SELECT COUNT(*) AS runs, COALESCE(SUM(reward),0) AS paid FROM arcade_runs WHERE created_at::timestamp > NOW() - INTERVAL '24 hours'").fetchone()
             return {'players': [dict(row) for row in players], 'topups': [dict(row) for row in topups], 'economy': {'total_yen': int(economy['total_yen']), 'player_count': int(economy['player_count']), 'runs_24h': int(runs['runs']), 'paid_24h': int(runs['paid'])}}

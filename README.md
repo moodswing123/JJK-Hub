@@ -40,3 +40,13 @@ The owner-only `/debug` command runs deterministic database, player, battle, and
 ## Battle media provider note
 
 The bot currently uses its Pillow-based generated GIF pipeline for `/battle`, `/ch`, and bot challenges. A connector inspection found no enabled Nano Banana provider or compatible free credential in the deployment configuration, so Nano Banana cannot be activated safely at this time. The Pillow pipeline is therefore the supported implementation; replacing it later requires a supported image-generation API and deployment secret.
+
+## Dashboard receipt forwarding
+
+The dashboard stores each yen top-up request and forwards the uploaded receipt to the owner’s Telegram DM through the Bot API. Configure these variables on the **JJK-Hub API deployment** (production):
+
+- `BOT_TOKEN` (or `TELEGRAM_BOT_TOKEN`) — the Telegram bot token
+- `OWNER_ID` (or `TELEGRAM_OWNER_ID`) — the numeric Telegram chat/user ID that should receive receipts
+- `OPAY_PROVIDER`, `OPAY_ACCOUNT_NAME`, `OPAY_ACCOUNT_NUMBER` — displayed payment instructions
+
+The API retries Telegram delivery three times, records `sent` or `failed` delivery status, and returns an error to the player if Telegram did not accept the receipt. The owner console shows the delivery state alongside each pending top-up.

@@ -38,7 +38,8 @@ export type MarketTrade = { trade_id: number; ticker: string; side: 'buy' | 'sel
 export type MarketSnapshot = { yen: number; assets: MarketAsset[]; holdings: MarketHolding[]; trades: MarketTrade[] };
 export type TopupInfo = { provider: string; account_name: string; account_number: string; notice: string };
 export type SkillGameResult = { ok: boolean; game_id: string; title: string; success: boolean; reward: number; balance: number; distance?: number; prompt?: string };
-export type AdminOverview = { players: { user_id: number; username: string | null; display_name: string; level: number; rank: string; yen: number; wins: number; losses: number; last_active_at: string | null }[]; topups: { topup_id: number; user_id: number; display_name: string | null; amount: number; reference: string; status: string; created_at: string }[]; economy: { total_yen: number; player_count: number; runs_24h: number; paid_24h: number } };
+export type AdminPrice = { id: number; name: string; description?: string; type?: string; grade?: string; price: number };
+export type AdminOverview = { players: { user_id: number; username: string | null; display_name: string; level: number; rank: string; yen: number; wins: number; losses: number; last_active_at: string | null }[]; topups: { topup_id: number; user_id: number; display_name: string | null; amount: number; reference: string; status: string; delivery_status?: string; created_at: string }[]; prices: { shop_items: AdminPrice[]; characters: AdminPrice[] }; receipt_forwarding_configured?: boolean; economy: { total_yen: number; player_count: number; runs_24h: number; paid_24h: number } };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem('jjk_token');
@@ -73,4 +74,5 @@ export const jjkApi = {
   adminOverview: () => request<AdminOverview>('/admin/overview'),
   reviewTopup: (topupId: number, status: 'approved' | 'rejected') => request<{ ok: boolean; status: string }>(`/admin/topups/${topupId}`, { method: 'POST', body: JSON.stringify({ status }) }),
   adjustYen: (userId: number, amount: number) => request<{ ok: boolean; balance: number }>(`/admin/players/${userId}/yen`, { method: 'POST', body: JSON.stringify({ amount }) }),
+  updatePrice: (source: 'shop_item' | 'character', itemId: number, price: number) => request<{ ok: boolean; item: AdminPrice }>(`/admin/prices/${source}/${itemId}`, { method: 'POST', body: JSON.stringify({ price }) }),
 };

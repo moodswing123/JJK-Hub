@@ -101,6 +101,28 @@ def require_admin(handler):
     return wrapped
 
 
+def _forward_receipt_to_owner(user_id: int, amount: int, reference: str, topup_id: int, receipt_name: str, receipt_mimetype: str, receipt_bytes: bytes):
+    bot_token = os.getenv("BOT_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN") or ""
+    owner_raw = os.getenv("OWNER_ID") or os.getenv("TELEGRAM_OWNER_ID") or ""
+    if not bot_token or not owner_raw.isdigit() or int(owner_raw) <= 0:
+        return False, "Telegram forwarding is not configured: BOT_TOKEN/TELEGRAM_BOT_TOKEN and OWNER_ID are required."
+    caption = f"Yen top-up pending\nPlayer ID: {user_id}\nAmount: ¥{amount:,}\nReference: {reference}\nTop-up ID: {topup_id}"
+    endpoint = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+    last_error = "Telegram did not accept the receipt."
+    for attempt in range(3):
+        try:
+            response = requests.post(endpoint, data={"chat_id": owner_raw, "caption": caption}, files={"document": (receipt_name, receipt_bytes, receipt_mimetype)}, timeout=20)
+            payload = response.json() if response.content else {}
+            if response.ok and payload.get("ok") is True:
+                return True, ""
+            last_error = str(payload.get("description") or f"Telegram HTTP {response.status_code}")
+        except (requests.RequestException, ValueError) as exc:
+            last_error = str(exc)
+        if attempt < 2:
+            time.sleep(1.5 * (attempt + 1))
+    return False, last_error
+
+
 @app.after_request
 def add_headers(response):
     origin = os.getenv("DASHBOARD_ORIGIN", "*")
@@ -259,23 +281,31 @@ def create_topup(user_id):
     result = get_db().create_topup_request(user_id, amount, reference)
     if not result.get("ok"):
         return jsonify({"error": "Enter a valid yen amount and payment reference."}), 400
-    forwarded = False
-    bot_token, owner_id = os.getenv("BOT_TOKEN", ""), os.getenv("OWNER_ID", "0")
-    if bot_token and owner_id.isdigit() and int(owner_id) > 0:
-        caption = f"Yen top-up pending\nPlayer ID: {user_id}\nAmount: ¥{amount:,}\nReference: {reference}\nTop-up ID: {result['topup_id']}"
-        try:
-            endpoint = f"https://api.telegram.org/bot{bot_token}/sendDocument"
-            response = requests.post(endpoint, data={"chat_id": owner_id, "caption": caption}, files={"document": (receipt.filename, receipt_bytes, receipt.mimetype)}, timeout=12)
-            forwarded = response.ok
-        except requests.RequestException:
-            forwarded = False
-    return jsonify({"success": True, "topup_id": result["topup_id"], "forwarded_to_owner": forwarded, "message": "Receipt received. Yen will be credited after manual verification."})
+    forwarded, delivery_error = _forward_receipt_to_owner(user_id, amount, reference, result['topup_id'], receipt.filename, receipt.mimetype, receipt_bytes)
+    get_db().update_topup_delivery(result['topup_id'], 'sent' if forwarded else 'failed', delivery_error)
+    if not forwarded:
+        return jsonify({"success": False, "topup_id": result["topup_id"], "forwarded_to_owner": False, "delivery_error": delivery_error, "error": "Receipt was saved but could not be sent to the owner. Please retry or contact the owner."}), 502
+    return jsonify({"success": True, "topup_id": result["topup_id"], "forwarded_to_owner": True, "message": "Receipt sent to the owner for manual verification."})
 
 
 @app.route("/api/admin/overview", methods=["GET"])
 @require_admin
 def admin_overview(_user_id):
-    return jsonify(get_db().get_admin_overview())
+    payload = get_db().get_admin_overview()
+    payload['prices'] = get_db().get_admin_prices()
+    payload['receipt_forwarding_configured'] = bool((os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN')) and (os.getenv('OWNER_ID') or os.getenv('TELEGRAM_OWNER_ID')))
+    return jsonify(payload)
+
+
+@app.route("/api/admin/prices/<source>/<int:item_id>", methods=["POST"])
+@require_admin
+def admin_update_price(_user_id, source, item_id):
+    try:
+        price = int((request.get_json(silent=True) or {}).get("price", 0))
+    except (TypeError, ValueError):
+        price = 0
+    result = get_db().update_admin_price(source, item_id, price)
+    return jsonify(result), (200 if result.get("ok") else 400)
 
 
 @app.route("/api/admin/topups/<int:topup_id>", methods=["POST"])
