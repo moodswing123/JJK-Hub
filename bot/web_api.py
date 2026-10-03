@@ -5,6 +5,7 @@ import hmac
 import json
 import os
 import time
+import requests
 from functools import wraps
 
 from flask import Flask, jsonify, request
@@ -186,6 +187,59 @@ def market_trade(user_id):
     status = 400 if result.get("reason") in {"invalid", "funds", "holdings"} else 404
     messages = {"invalid": "Invalid market order", "funds": "Insufficient yen", "holdings": "Insufficient holdings", "not_found": "Market asset or player not found"}
     return jsonify({"error": messages.get(result.get("reason"), "Market order failed"), **result}), status
+
+
+@app.route("/api/arcade/play", methods=["POST"])
+@require_user
+def arcade_play(user_id):
+    data = request.get_json(silent=True) or {}
+    result = get_db().play_arcade_game(user_id, str(data.get("game_id", "")).strip().lower())
+    if result.get("ok"):
+        return jsonify(result)
+    status = 429 if result.get("reason") == "cooldown" else 400
+    messages = {"invalid": "Unknown arcade game", "cooldown": "That game is cooling down"}
+    return jsonify({"error": messages.get(result.get("reason"), "Arcade run failed"), **result}), status
+
+
+@app.route("/api/topups/info", methods=["GET"])
+@require_user
+def topup_info(_user_id):
+    return jsonify({
+        "provider": os.getenv("OPAY_PROVIDER", "OPay"),
+        "account_name": os.getenv("OPAY_ACCOUNT_NAME", "Patrick"),
+        "account_number": os.getenv("OPAY_ACCOUNT_NUMBER", "6521307860"),
+        "notice": "Send payment first, then upload the receipt. Yen is credited only after manual verification.",
+    })
+
+
+@app.route("/api/topups/request", methods=["POST"])
+@require_user
+def create_topup(user_id):
+    try:
+        amount = int(request.form.get("amount", "0"))
+    except ValueError:
+        amount = 0
+    reference = str(request.form.get("reference", "")).strip()
+    receipt = request.files.get("receipt")
+    if not receipt or not receipt.filename or (receipt.mimetype or "").lower() not in {"image/jpeg", "image/png", "image/webp", "application/pdf"}:
+        return jsonify({"error": "Upload a JPG, PNG, WEBP, or PDF receipt."}), 400
+    receipt_bytes = receipt.read(5 * 1024 * 1024 + 1)
+    if len(receipt_bytes) > 5 * 1024 * 1024:
+        return jsonify({"error": "Receipt must be 5 MB or smaller."}), 400
+    result = get_db().create_topup_request(user_id, amount, reference)
+    if not result.get("ok"):
+        return jsonify({"error": "Enter a valid yen amount and payment reference."}), 400
+    forwarded = False
+    bot_token, owner_id = os.getenv("BOT_TOKEN", ""), os.getenv("OWNER_ID", "0")
+    if bot_token and owner_id.isdigit() and int(owner_id) > 0:
+        caption = f"Yen top-up pending\nPlayer ID: {user_id}\nAmount: ¥{amount:,}\nReference: {reference}\nTop-up ID: {result['topup_id']}"
+        try:
+            endpoint = f"https://api.telegram.org/bot{bot_token}/sendDocument"
+            response = requests.post(endpoint, data={"chat_id": owner_id, "caption": caption}, files={"document": (receipt.filename, receipt_bytes, receipt.mimetype)}, timeout=12)
+            forwarded = response.ok
+        except requests.RequestException:
+            forwarded = False
+    return jsonify({"success": True, "topup_id": result["topup_id"], "forwarded_to_owner": forwarded, "message": "Receipt received. Yen will be credited after manual verification."})
 
 
 @app.route("/api/dashboard/summary", methods=["GET"])

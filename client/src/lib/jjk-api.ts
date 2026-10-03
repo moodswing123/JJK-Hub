@@ -32,10 +32,11 @@ export type Activity = { id: number | string; message: string; created_at: strin
 export type InventoryItem = { id: number; name: string; type?: string; price?: number; description?: string; use_description?: string; effect?: Record<string, number> | string | null };
 
 export type Summary = { player: Player; online_count: number; recent_activity: Activity[]; announcements?: { title: string; content: string }[]; daily_status?: { streak?: number; can_claim?: boolean } };
-export type MarketAsset = { asset_id: string; ticker: string; name: string; description: string; price: number; change_percent: number; updated_at: string };
+export type MarketAsset = { asset_id: string; ticker: string; name: string; description: string; price: number; previous_price: number; change_percent: number; updated_at: string; asset_type: string; sector: string; volatility: number; day_high: number; day_low: number; volume_24h: number };
 export type MarketHolding = { asset_id: string; quantity: number; average_price: number };
 export type MarketTrade = { trade_id: number; ticker: string; side: 'buy' | 'sell'; quantity: number; price: number; total: number; created_at: string };
 export type MarketSnapshot = { yen: number; assets: MarketAsset[]; holdings: MarketHolding[]; trades: MarketTrade[] };
+export type TopupInfo = { provider: string; account_name: string; account_number: string; notice: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = localStorage.getItem('jjk_token');
@@ -56,4 +57,14 @@ export const jjkApi = {
   logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }),
   market: () => request<MarketSnapshot>('/market'),
   trade: (assetId: string, side: 'buy' | 'sell', quantity: number) => request<{ ok: boolean; balance: number; total: number; holding_quantity: number }>('/market/trade', { method: 'POST', body: JSON.stringify({ asset_id: assetId, side, quantity }) }),
+  arcade: (gameId: string) => request<{ ok: boolean; title: string; success: boolean; reward: number; balance: number; message: string; prompt: string }>('/arcade/play', { method: 'POST', body: JSON.stringify({ game_id: gameId }) }),
+  topupInfo: () => request<TopupInfo>('/topups/info'),
+  submitTopup: async (amount: number, reference: string, receipt: File) => {
+    const form = new FormData(); form.append('amount', String(amount)); form.append('reference', reference); form.append('receipt', receipt);
+    const token = localStorage.getItem('jjk_token');
+    const response = await fetch(`${API_BASE}/topups/request`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || 'Receipt submission failed');
+    return payload as { success: boolean; topup_id: number; forwarded_to_owner: boolean; message: string };
+  },
 };

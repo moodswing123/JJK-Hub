@@ -200,7 +200,14 @@ class Database:
                     description TEXT NOT NULL,
                     price INTEGER NOT NULL CHECK (price > 0),
                     change_percent DOUBLE PRECISION NOT NULL DEFAULT 0,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    asset_type TEXT NOT NULL DEFAULT 'index',
+                    sector TEXT NOT NULL DEFAULT 'cursed energy',
+                    volatility DOUBLE PRECISION NOT NULL DEFAULT 0.08,
+                    previous_price INTEGER NOT NULL DEFAULT 1,
+                    day_high INTEGER NOT NULL DEFAULT 1,
+                    day_low INTEGER NOT NULL DEFAULT 1,
+                    volume_24h INTEGER NOT NULL DEFAULT 0
                 )
             """)
             conn.execute("""
@@ -225,14 +232,47 @@ class Database:
                     created_at TEXT NOT NULL
                 )
             """)
+            conn.execute("ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS asset_type TEXT NOT NULL DEFAULT 'index'")
+            conn.execute("ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS sector TEXT NOT NULL DEFAULT 'cursed energy'")
+            conn.execute("ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS volatility DOUBLE PRECISION NOT NULL DEFAULT 0.08")
+            conn.execute("ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS previous_price INTEGER NOT NULL DEFAULT 1")
+            conn.execute("ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS day_high INTEGER NOT NULL DEFAULT 1")
+            conn.execute("ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS day_low INTEGER NOT NULL DEFAULT 1")
+            conn.execute("ALTER TABLE market_assets ADD COLUMN IF NOT EXISTS volume_24h INTEGER NOT NULL DEFAULT 0")
             conn.execute("""
-                INSERT INTO market_assets (asset_id, ticker, name, description, price, change_percent, updated_at)
+                CREATE TABLE IF NOT EXISTS arcade_runs (
+                    run_id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES players(user_id) ON DELETE CASCADE,
+                    game_id TEXT NOT NULL,
+                    reward INTEGER NOT NULL DEFAULT 0,
+                    success INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS yen_topups (
+                    topup_id BIGSERIAL PRIMARY KEY,
+                    user_id BIGINT NOT NULL REFERENCES players(user_id) ON DELETE CASCADE,
+                    amount INTEGER NOT NULL CHECK (amount > 0),
+                    reference TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("""
+                INSERT INTO market_assets (asset_id, ticker, name, description, price, change_percent, updated_at, asset_type, sector, volatility, previous_price, day_high, day_low, volume_24h)
                 VALUES
-                  ('sukuna', 'SUKUNA', 'King of Curses', 'High-volatility cursed energy index.', 2400, 12.8, NOW()::text),
-                  ('sixeyes', 'SIXEYES', 'Six Eyes Index', 'Precision and perception sector.', 1820, 6.4, NOW()::text),
-                  ('mahito', 'MAHITO', 'Soul Mutation', 'Speculative soul-tech asset.', 760, -3.1, NOW()::text)
+                  ('sukuna', 'SUKUNA', 'King of Curses', 'High-volatility cursed energy index.', 2400, 0, NOW()::text, 'index', 'cursed energy', 0.12, 2400, 2400, 2400, 0),
+                  ('sixeyes', 'SIXEYES', 'Six Eyes Index', 'Precision and perception sector.', 1820, 0, NOW()::text, 'stock', 'technique research', 0.07, 1820, 1820, 1820, 0),
+                  ('mahito', 'MAHITO', 'Soul Mutation', 'Speculative soul-tech asset.', 760, 0, NOW()::text, 'crypto', 'soul-tech', 0.2, 760, 760, 760, 0),
+                  ('rika', 'RIKA', 'Rika Holdings', 'Premium cursed-companion services company.', 1280, 0, NOW()::text, 'stock', 'special-grade services', 0.09, 1280, 1280, 1280, 0),
+                  ('blackflash', 'BFLASH', 'Black Flash Labs', 'Combat timing and impact analytics.', 990, 0, NOW()::text, 'stock', 'combat analytics', 0.11, 990, 990, 990, 0),
+                  ('barrier', 'BARRIER', 'Barrier Protocol', 'Defensive infrastructure protocol token.', 430, 0, NOW()::text, 'crypto', 'barrier infrastructure', 0.24, 430, 430, 430, 0),
+                  ('heavenly', 'HEAVEN', 'Heavenly Restriction', 'Rare zero-energy performance asset.', 2750, 0, NOW()::text, 'index', 'physical enhancement', 0.15, 2750, 2750, 2750, 0),
+                  ('culling', 'CULL', 'Culling Game Exchange', 'Event-driven arena economy token.', 615, 0, NOW()::text, 'crypto', 'arena economy', 0.28, 615, 615, 615, 0)
                 ON CONFLICT (asset_id) DO NOTHING
             """)
+            conn.execute("UPDATE market_assets SET previous_price=price, day_high=GREATEST(day_high, price), day_low=LEAST(NULLIF(day_low, 0), price) WHERE day_low=0 OR previous_price=0")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_pvp_chat_status ON pvp_battles(chat_id, status)"
             )
@@ -796,8 +836,35 @@ class Database:
             ).fetchall()
             return [dict(row) for row in rows]
 
+    def _tick_market(self, conn):
+        """Advance fictional prices in small, bounded steps; never touches player yen."""
+        now = datetime.utcnow()
+        rows = conn.execute("SELECT * FROM market_assets FOR UPDATE").fetchall()
+        for asset in rows:
+            try:
+                updated = datetime.fromisoformat(str(asset['updated_at']).replace('Z', '+00:00')).replace(tzinfo=None)
+            except (TypeError, ValueError):
+                updated = now - timedelta(minutes=5)
+            if (now - updated).total_seconds() < 45:
+                continue
+            price = max(1, int(asset['price']))
+            volatility = max(0.01, min(0.35, float(asset.get('volatility', 0.08) or 0.08)))
+            # A reproducible hourly market impulse plus a small order-flow shock.
+            seed = f"{asset['asset_id']}:{now.strftime('%Y%m%d%H')}"
+            rng = random.Random(seed)
+            drift = rng.uniform(-volatility, volatility) + random.uniform(-volatility / 5, volatility / 5)
+            new_price = max(1, round(price * (1 + max(-0.25, min(0.25, drift)))))
+            change = round((new_price - price) / price * 100, 2)
+            volume = int(asset.get('volume_24h', 0) or 0) + rng.randint(8, 120)
+            conn.execute("""
+                UPDATE market_assets SET previous_price=%s, price=%s, change_percent=%s,
+                    day_high=GREATEST(day_high, %s), day_low=LEAST(day_low, %s),
+                    volume_24h=%s, updated_at=%s WHERE asset_id=%s
+            """, (price, new_price, change, new_price, new_price, volume, now.isoformat(), asset['asset_id']))
+
     def get_market_snapshot(self, user_id: int) -> Dict:
         with self._conn() as conn:
+            self._tick_market(conn)
             assets = conn.execute("SELECT * FROM market_assets ORDER BY asset_id").fetchall()
             holdings = conn.execute("""
                 SELECT h.asset_id, h.quantity, h.average_price
@@ -810,6 +877,38 @@ class Database:
                 WHERE t.user_id=%s ORDER BY t.trade_id DESC LIMIT 12
             """, (user_id,)).fetchall()
             return {'yen': int((player or {}).get('yen', 0)), 'assets': [dict(a) for a in assets], 'holdings': [dict(h) for h in holdings], 'trades': [dict(t) for t in trades]}
+
+    def play_arcade_game(self, user_id: int, game_id: str) -> Dict:
+        games = {
+            'curse_hunt': ('Curse Hunt', 0.68, (90, 320), 'Track a cursed signature through the abandoned station.'),
+            'domain_dash': ('Domain Dash', 0.52, (160, 520), 'Thread the barrier before it collapses.'),
+            'black_flash': ('Black Flash Timing', 0.38, (260, 900), 'Hit the impact window at exactly 0.000001 seconds.'),
+        }
+        if game_id not in games:
+            return {'ok': False, 'reason': 'invalid'}
+        title, success_rate, rewards, prompt = games[game_id]
+        now = datetime.utcnow()
+        with self._conn() as conn:
+            recent = conn.execute("SELECT created_at FROM arcade_runs WHERE user_id=%s ORDER BY run_id DESC LIMIT 1", (user_id,)).fetchone()
+            if recent:
+                try:
+                    elapsed = (now - datetime.fromisoformat(str(recent['created_at']))).total_seconds()
+                    if elapsed < 30:
+                        return {'ok': False, 'reason': 'cooldown', 'retry_after': max(1, 30 - int(elapsed))}
+                except ValueError:
+                    pass
+            player = conn.execute("SELECT yen FROM players WHERE user_id=%s FOR UPDATE", (user_id,)).fetchone()
+            if not player:
+                return {'ok': False, 'reason': 'not_found'}
+            rng = random.SystemRandom()
+            success = rng.random() < success_rate
+            reward = rng.randint(*rewards) if success else 0
+            if reward:
+                conn.execute("UPDATE players SET yen=yen+%s WHERE user_id=%s", (reward, user_id))
+            created = now.isoformat()
+            conn.execute("INSERT INTO arcade_runs (user_id,game_id,reward,success,created_at) VALUES (%s,%s,%s,%s,%s)", (user_id, game_id, reward, int(success), created))
+            balance = int(player['yen']) + reward
+            return {'ok': True, 'game_id': game_id, 'title': title, 'success': success, 'reward': reward, 'balance': balance, 'prompt': prompt, 'message': f"{title}: {'success' if success else 'miss'}"}
 
     def execute_market_trade(self, user_id: int, asset_id: str, side: str, quantity: int) -> Dict:
         if side not in ('buy', 'sell') or quantity < 1 or quantity > 100000:
@@ -848,6 +947,15 @@ class Database:
             conn.execute("UPDATE players SET yen=yen+%s WHERE user_id=%s", (amount, user_id))
             row = conn.execute("SELECT yen FROM players WHERE user_id=%s", (user_id,)).fetchone()
             return row['yen']
+
+    def create_topup_request(self, user_id: int, amount: int, reference: str) -> Dict:
+        if amount < 1 or amount > 100000000 or not reference.strip():
+            return {'ok': False, 'reason': 'invalid'}
+        now = datetime.utcnow().isoformat()
+        with self._conn() as conn:
+            row = conn.execute("""INSERT INTO yen_topups (user_id,amount,reference,status,created_at)
+                VALUES (%s,%s,%s,'pending',%s) RETURNING topup_id, created_at""", (user_id, amount, reference.strip()[:120], now)).fetchone()
+            return {'ok': True, 'topup_id': int(row['topup_id']), 'created_at': row['created_at']}
 
     def deduct_yen(self, user_id: int, amount: int) -> bool:
         with self._conn() as conn:
