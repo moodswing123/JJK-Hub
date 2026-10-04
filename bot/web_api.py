@@ -281,6 +281,9 @@ def create_topup(user_id):
         amount = 0
     reference = str(request.form.get("reference", "")).strip()
     naira_amount = (amount + 999) // 1000
+    submitted_naira = str(request.form.get("naira_amount", "")).strip()
+    if submitted_naira and (not submitted_naira.isdigit() or int(submitted_naira) != naira_amount):
+        return jsonify({"error": "The naira amount does not match the yen conversion."}), 400
     receipt = request.files.get("receipt")
     if not receipt or not receipt.filename or (receipt.mimetype or "").lower() not in {"image/jpeg", "image/png", "image/webp", "application/pdf"}:
         return jsonify({"error": "Upload a JPG, PNG, WEBP, or PDF receipt."}), 400

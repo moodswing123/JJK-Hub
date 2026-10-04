@@ -62,8 +62,8 @@ export const jjkApi = {
   trade: (assetId: string, side: 'buy' | 'sell', quantity: number) => request<{ ok: boolean; balance: number; total: number; holding_quantity: number }>('/market/trade', { method: 'POST', body: JSON.stringify({ asset_id: assetId, side, quantity }) }),
   arcade: (gameId: string) => request<{ ok: boolean; title: string; success: boolean; reward: number; balance: number; message: string; prompt: string }>('/arcade/play', { method: 'POST', body: JSON.stringify({ game_id: gameId }) }),
   topupInfo: () => request<TopupInfo>('/topups/info'),
-  submitTopup: async (amount: number, reference: string, receipt: File) => {
-    const form = new FormData(); form.append('amount', String(amount)); form.append('reference', reference); form.append('receipt', receipt);
+  submitTopup: async (amount: number, nairaAmount: number, reference: string, receipt: File) => {
+    const form = new FormData(); form.append('amount', String(amount)); form.append('naira_amount', String(nairaAmount)); form.append('reference', reference); form.append('receipt', receipt);
     const token = localStorage.getItem('jjk_token');
     const response = await fetch(`${API_BASE}/topups/request`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form });
     const payload = await response.json().catch(() => ({}));

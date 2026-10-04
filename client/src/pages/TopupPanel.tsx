@@ -28,7 +28,7 @@ export default function TopupPanel({ onBalanceChange: _onBalanceChange }: Props)
     if (!receipt) return setError('Choose your payment receipt first.');
     setBusy(true); setError(''); setMessage('');
     try {
-      const result = await jjkApi.submitTopup(yenAmount, reference, receipt);
+      const result = await jjkApi.submitTopup(yenAmount, nairaAmount, reference, receipt);
       setMessage(`${result.message} Request #${result.topup_id}.`);
       setReference(''); setReceipt(null);
       if (isCustom) setCustom('');
