@@ -106,7 +106,7 @@ def _forward_receipt_to_owner(user_id: int, amount: int, reference: str, topup_i
     owner_raw = os.getenv("OWNER_ID") or os.getenv("TELEGRAM_OWNER_ID") or ""
     if not bot_token or not owner_raw.isdigit() or int(owner_raw) <= 0:
         return False, "Telegram forwarding is not configured: BOT_TOKEN/TELEGRAM_BOT_TOKEN and OWNER_ID are required."
-    caption = f"Yen top-up pending\nPlayer ID: {user_id}\nAmount: ¥{amount:,}\nReference: {reference}\nTop-up ID: {topup_id}"
+    caption = f"Yen top-up pending\nPlayer ID: {user_id}\nYen: ¥{amount:,}\nNaira due: ₦{(amount + 999) // 1000:,}\nReference: {reference}\nTop-up ID: {topup_id}"
     endpoint = f"https://api.telegram.org/bot{bot_token}/sendDocument"
     last_error = "Telegram did not accept the receipt."
     for attempt in range(3):
@@ -260,7 +260,15 @@ def topup_info(_user_id):
         "provider": os.getenv("OPAY_PROVIDER", "OPay"),
         "account_name": os.getenv("OPAY_ACCOUNT_NAME", "Patrick"),
         "account_number": os.getenv("OPAY_ACCOUNT_NUMBER", "6521307860"),
-        "notice": "Send payment first, then upload the receipt. Yen is credited only after manual verification.",
+        "rate_yen_per_naira": 1000,
+        "packages": [
+            {"yen": 100000, "naira": 100},
+            {"yen": 250000, "naira": 250},
+            {"yen": 500000, "naira": 500},
+            {"yen": 750000, "naira": 750},
+            {"yen": 1000000, "naira": 1000},
+        ],
+        "notice": "Send the exact naira amount first, then upload the receipt. Yen is credited automatically when the owner approves the receipt.",
     })
 
 
@@ -272,20 +280,21 @@ def create_topup(user_id):
     except ValueError:
         amount = 0
     reference = str(request.form.get("reference", "")).strip()
+    naira_amount = (amount + 999) // 1000
     receipt = request.files.get("receipt")
     if not receipt or not receipt.filename or (receipt.mimetype or "").lower() not in {"image/jpeg", "image/png", "image/webp", "application/pdf"}:
         return jsonify({"error": "Upload a JPG, PNG, WEBP, or PDF receipt."}), 400
     receipt_bytes = receipt.read(5 * 1024 * 1024 + 1)
     if len(receipt_bytes) > 5 * 1024 * 1024:
         return jsonify({"error": "Receipt must be 5 MB or smaller."}), 400
-    result = get_db().create_topup_request(user_id, amount, reference)
+    result = get_db().create_topup_request(user_id, amount, reference, naira_amount)
     if not result.get("ok"):
         return jsonify({"error": "Enter a valid yen amount and payment reference."}), 400
     forwarded, delivery_error = _forward_receipt_to_owner(user_id, amount, reference, result['topup_id'], receipt.filename, receipt.mimetype, receipt_bytes)
     get_db().update_topup_delivery(result['topup_id'], 'sent' if forwarded else 'failed', delivery_error)
     if not forwarded:
         return jsonify({"success": False, "topup_id": result["topup_id"], "forwarded_to_owner": False, "delivery_error": delivery_error, "error": "Receipt was saved but could not be sent to the owner. Please retry or contact the owner."}), 502
-    return jsonify({"success": True, "topup_id": result["topup_id"], "forwarded_to_owner": True, "message": "Receipt sent to the owner for manual verification."})
+    return jsonify({"success": True, "topup_id": result["topup_id"], "forwarded_to_owner": True, "naira_amount": naira_amount, "message": f"Receipt sent. Send ₦{naira_amount:,}; yen will be credited automatically after approval."})
 
 
 @app.route("/api/admin/overview", methods=["GET"])

@@ -36,7 +36,7 @@ export type MarketAsset = { asset_id: string; ticker: string; name: string; desc
 export type MarketHolding = { asset_id: string; quantity: number; average_price: number };
 export type MarketTrade = { trade_id: number; ticker: string; side: 'buy' | 'sell'; quantity: number; price: number; total: number; created_at: string };
 export type MarketSnapshot = { yen: number; assets: MarketAsset[]; holdings: MarketHolding[]; trades: MarketTrade[] };
-export type TopupInfo = { provider: string; account_name: string; account_number: string; notice: string };
+export type TopupInfo = { provider: string; account_name: string; account_number: string; notice: string; rate_yen_per_naira: number; packages: { yen: number; naira: number }[] };
 export type SkillGameResult = { ok: boolean; game_id: string; title: string; success: boolean; reward: number; balance: number; distance?: number; prompt?: string };
 export type AdminPrice = { id: number; name: string; description?: string; type?: string; grade?: string; price: number };
 export type AdminOverview = { players: { user_id: number; username: string | null; display_name: string; level: number; rank: string; yen: number; wins: number; losses: number; last_active_at: string | null }[]; topups: { topup_id: number; user_id: number; display_name: string | null; amount: number; reference: string; status: string; delivery_status?: string; created_at: string }[]; prices: { shop_items: AdminPrice[]; characters: AdminPrice[] }; receipt_forwarding_configured?: boolean; economy: { total_yen: number; player_count: number; runs_24h: number; paid_24h: number } };
@@ -68,11 +68,11 @@ export const jjkApi = {
     const response = await fetch(`${API_BASE}/topups/request`, { method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: form });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload?.error || 'Receipt submission failed');
-    return payload as { success: boolean; topup_id: number; forwarded_to_owner: boolean; message: string };
+    return payload as { success: boolean; topup_id: number; forwarded_to_owner: boolean; naira_amount: number; message: string };
   },
   skillGame: (gameId: string, action: Record<string, number>) => request<SkillGameResult>('/arcade/skill', { method: 'POST', body: JSON.stringify({ game_id: gameId, action }) }),
   adminOverview: () => request<AdminOverview>('/admin/overview'),
-  reviewTopup: (topupId: number, status: 'approved' | 'rejected') => request<{ ok: boolean; status: string }>(`/admin/topups/${topupId}`, { method: 'POST', body: JSON.stringify({ status }) }),
+  reviewTopup: (topupId: number, status: 'approved' | 'rejected') => request<{ ok: boolean; status: string; credited_yen: number; balance: number }>(`/admin/topups/${topupId}`, { method: 'POST', body: JSON.stringify({ status }) }),
   adjustYen: (userId: number, amount: number) => request<{ ok: boolean; balance: number }>(`/admin/players/${userId}/yen`, { method: 'POST', body: JSON.stringify({ amount }) }),
   updatePrice: (source: 'shop_item' | 'character', itemId: number, price: number) => request<{ ok: boolean; item: AdminPrice }>(`/admin/prices/${source}/${itemId}`, { method: 'POST', body: JSON.stringify({ price }) }),
 };

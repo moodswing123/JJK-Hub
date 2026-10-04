@@ -254,6 +254,7 @@ class Database:
                     topup_id BIGSERIAL PRIMARY KEY,
                     user_id BIGINT NOT NULL REFERENCES players(user_id) ON DELETE CASCADE,
                     amount INTEGER NOT NULL CHECK (amount > 0),
+                    naira_amount INTEGER NOT NULL DEFAULT 1 CHECK (naira_amount > 0),
                     reference TEXT NOT NULL,
                     status TEXT NOT NULL DEFAULT 'pending',
                     delivery_status TEXT NOT NULL DEFAULT 'pending',
@@ -263,6 +264,7 @@ class Database:
             """)
             conn.execute("ALTER TABLE yen_topups ADD COLUMN IF NOT EXISTS delivery_status TEXT NOT NULL DEFAULT 'pending'")
             conn.execute("ALTER TABLE yen_topups ADD COLUMN IF NOT EXISTS delivery_error TEXT")
+            conn.execute("ALTER TABLE yen_topups ADD COLUMN IF NOT EXISTS naira_amount INTEGER NOT NULL DEFAULT 1")
             conn.execute("""
                 INSERT INTO market_assets (asset_id, ticker, name, description, price, change_percent, updated_at, asset_type, sector, volatility, previous_price, day_high, day_low, volume_24h)
                 VALUES
@@ -952,14 +954,17 @@ class Database:
             row = conn.execute("SELECT yen FROM players WHERE user_id=%s", (user_id,)).fetchone()
             return row['yen']
 
-    def create_topup_request(self, user_id: int, amount: int, reference: str) -> Dict:
+    def create_topup_request(self, user_id: int, amount: int, reference: str, naira_amount: int | None = None) -> Dict:
         if amount < 1 or amount > 100000000 or not reference.strip():
+            return {'ok': False, 'reason': 'invalid'}
+        naira_amount = int(naira_amount or ((amount + 999) // 1000))
+        if naira_amount < 1:
             return {'ok': False, 'reason': 'invalid'}
         now = datetime.utcnow().isoformat()
         with self._conn() as conn:
-            row = conn.execute("""INSERT INTO yen_topups (user_id,amount,reference,status,created_at)
-                VALUES (%s,%s,%s,'pending',%s) RETURNING topup_id, created_at""", (user_id, amount, reference.strip()[:120], now)).fetchone()
-            return {'ok': True, 'topup_id': int(row['topup_id']), 'created_at': row['created_at']}
+            row = conn.execute("""INSERT INTO yen_topups (user_id,amount,naira_amount,reference,status,created_at)
+                VALUES (%s,%s,%s,%s,'pending',%s) RETURNING topup_id, created_at""", (user_id, amount, naira_amount, reference.strip()[:120], now)).fetchone()
+            return {'ok': True, 'topup_id': int(row['topup_id']), 'created_at': row['created_at'], 'naira_amount': naira_amount}
 
     def update_topup_delivery(self, topup_id: int, status: str, error: str = '') -> bool:
         if status not in ('sent', 'failed'):
@@ -1020,7 +1025,7 @@ class Database:
     def get_admin_overview(self) -> Dict:
         with self._conn() as conn:
             players = conn.execute("SELECT user_id, username, display_name, level, rank, yen, wins, losses, last_active_at FROM players ORDER BY last_active_at DESC NULLS LAST LIMIT 100").fetchall()
-            topups = conn.execute("SELECT t.topup_id, t.user_id, p.display_name, t.amount, t.reference, t.status, t.delivery_status, t.delivery_error, t.created_at FROM yen_topups t LEFT JOIN players p ON p.user_id=t.user_id ORDER BY t.topup_id DESC LIMIT 50").fetchall()
+            topups = conn.execute("SELECT t.topup_id, t.user_id, p.display_name, t.amount, t.naira_amount, t.reference, t.status, t.delivery_status, t.delivery_error, t.created_at FROM yen_topups t LEFT JOIN players p ON p.user_id=t.user_id ORDER BY t.topup_id DESC LIMIT 50").fetchall()
             economy = conn.execute("SELECT COALESCE(SUM(yen),0) AS total_yen, COUNT(*) AS player_count FROM players").fetchone()
             runs = conn.execute("SELECT COUNT(*) AS runs, COALESCE(SUM(reward),0) AS paid FROM arcade_runs WHERE created_at::timestamp > NOW() - INTERVAL '24 hours'").fetchone()
             return {'players': [dict(row) for row in players], 'topups': [dict(row) for row in topups], 'economy': {'total_yen': int(economy['total_yen']), 'player_count': int(economy['player_count']), 'runs_24h': int(runs['runs']), 'paid_24h': int(runs['paid'])}}
@@ -1033,9 +1038,11 @@ class Database:
             if not row or row['status'] != 'pending':
                 return {'ok': False, 'reason': 'not_pending'}
             if status == 'approved':
-                conn.execute("UPDATE players SET yen=yen+%s WHERE user_id=%s", (int(row['amount']), int(row['user_id'])))
+                balance = conn.execute("UPDATE players SET yen=yen+%s WHERE user_id=%s RETURNING yen", (int(row['amount']), int(row['user_id']))).fetchone()
+            else:
+                balance = conn.execute("SELECT yen FROM players WHERE user_id=%s", (int(row['user_id']),)).fetchone()
             conn.execute("UPDATE yen_topups SET status=%s WHERE topup_id=%s", (status, topup_id))
-            return {'ok': True, 'topup_id': topup_id, 'status': status}
+            return {'ok': True, 'topup_id': topup_id, 'status': status, 'credited_yen': int(row['amount']) if status == 'approved' else 0, 'balance': int(balance['yen']) if balance else 0}
 
     def admin_adjust_yen(self, user_id: int, amount: int) -> Dict:
         if abs(amount) > 100000000:
